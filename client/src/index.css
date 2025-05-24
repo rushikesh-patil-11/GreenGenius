@@ -45,6 +45,17 @@
   --chart-3: 28 83% 52%; /* #E67E22 */
   --chart-4: 6 78% 57%; /* #E74C3C */
   --chart-5: 37 90% 51%; /* #F39C12 */
+  
+  --background-color: #ffffff;
+  --text-color: #333333;
+  --primary-color: #4CAF50;
+  --secondary-color: #f0f0f0;
+  --header-bg: #f8f9fa;
+  --card-bg: #ffffff;
+  --border-color: #dee2e6;
+  --button-bg: #4CAF50;
+  --button-text: #ffffff;
+  --link-color: #007bff;
 }
 
 .dark {
@@ -80,6 +91,26 @@
   --warning: 37 90% 51%; /* #F39C12 */
   
   --ring: 145 68% 49%; /* #2ECC71 */
+  
+  --background-color: #121212;
+  --text-color: #e0e0e0;
+  --primary-color: #66bb6a; /* A slightly lighter green for dark mode */
+  --secondary-color: #1e1e1e;
+  --header-bg: #1e1e1e;
+  --card-bg: #2c2c2c;
+  --border-color: #444444;
+  --button-bg: #66bb6a;
+  --button-text: #121212;
+  --link-color: #90caf9;
+}
+
+body {
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: sans-serif;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 @layer base {

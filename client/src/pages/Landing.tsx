@@ -1,28 +1,17 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Leaf, Sparkles, Calendar, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Landing() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-100 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2">
-              <Leaf className="h-8 w-8 text-primary" />
-              <span className="font-bold text-xl text-foreground">PlantCare Pro</span>
-            </div>
-            <Link href="/dashboard">
-              <Button className="bg-primary hover:bg-primary/90 text-white">
-                Sign In
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Section */}
       <section className="pt-20 pb-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -31,12 +20,13 @@ export default function Landing() {
             <span className="text-primary block">Plant Care</span>
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Transform your home into a thriving garden with intelligent plant management, 
-            personalized care schedules, and AI-driven recommendations.
+            Transform your home into a thriving garden with intelligent plant
+            management, personalized care schedules, and AI-driven
+            recommendations.
           </p>
           <Link href="/dashboard">
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="bg-primary hover:bg-primary/90 text-white text-lg px-8 py-6"
             >
               Get Started Free
@@ -54,7 +44,8 @@ export default function Landing() {
               Everything You Need for Plant Success
             </h2>
             <p className="text-lg text-muted-foreground">
-              Comprehensive plant care management powered by artificial intelligence
+              Comprehensive plant care management powered by artificial
+              intelligence
             </p>
           </div>
 
@@ -71,8 +62,8 @@ export default function Landing() {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">
-                  Our AI analyzes your plants' needs and provides tailored recommendations 
-                  for optimal growth and health.
+                  Our AI analyzes your plants' needs and provides tailored
+                  recommendations for optimal growth and health.
                 </p>
               </CardContent>
             </Card>
@@ -89,8 +80,8 @@ export default function Landing() {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">
-                  Customized care schedules based on each plant's specific needs, 
-                  season, and environmental conditions.
+                  Customized care schedules based on each plant's specific
+                  needs, season, and environmental conditions.
                 </p>
               </CardContent>
             </Card>
@@ -107,7 +98,7 @@ export default function Landing() {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">
-                  Track growth milestones, health status, and care history to 
+                  Track growth milestones, health status, and care history to
                   optimize your plant care routine.
                 </p>
               </CardContent>
@@ -125,12 +116,13 @@ export default function Landing() {
                 Ready to Transform Your Plant Care?
               </h2>
               <p className="text-lg text-muted-foreground mb-6">
-                Join thousands of plant enthusiasts who have revolutionized their gardening 
-                with AI-powered insights and smart care management.
+                Join thousands of plant enthusiasts who have revolutionized
+                their gardening with AI-powered insights and smart care
+                management.
               </p>
               <Link href="/dashboard">
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   className="bg-primary hover:bg-primary/90 text-white"
                 >
                   Start Your Plant Journey

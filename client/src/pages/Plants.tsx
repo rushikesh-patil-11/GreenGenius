@@ -1,0 +1,187 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Plus, Filter } from "lucide-react";
+import Sidebar from "@/components/layout/Sidebar";
+import MobileNavigation from "@/components/layout/MobileNavigation";
+import { PlantCard } from "@/components/plants/PlantCard";
+import AddPlantModal from "@/components/modals/AddPlantModal";
+import { usePlants } from "@/hooks/usePlants";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+
+export default function Plants() {
+  const userId = 1; // In a real app, this would come from authentication
+  const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
+  const [filter, setFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const { plants, healthMetrics, isLoading } = usePlants(userId);
+  
+  const handleAddPlant = () => {
+    setIsAddPlantModalOpen(true);
+  };
+  
+  // Filter and search plants
+  const filteredPlants = plants.filter(plant => {
+    // First apply search filter
+    const matchesSearch = plant.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         (plant.species || "").toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (!matchesSearch) return false;
+    
+    // Then apply category filter
+    if (filter === "all") return true;
+    
+    const health = healthMetrics[plant.id]?.overallHealth || 0;
+    
+    if (filter === "needs-attention") {
+      return health < 75;
+    } else if (filter === "healthy") {
+      return health >= 75;
+    }
+    
+    return true;
+  });
+
+  return (
+    <div className="flex h-screen bg-background">
+      {/* Desktop Sidebar */}
+      <Sidebar />
+      
+      {/* Main Content */}
+      <main className="main-content flex-1 overflow-y-auto pb-16">
+        <div className="p-6 md:p-8">
+          {/* Page Header */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold font-poppins text-textColor dark:text-foreground">
+                My Plants
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Manage and track all your plants in one place
+              </p>
+            </div>
+            <div className="mt-4 md:mt-0">
+              <Button 
+                className="bg-primary hover:bg-primary-light text-white"
+                onClick={handleAddPlant}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                <span>Add Plant</span>
+              </Button>
+            </div>
+          </div>
+          
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Input
+                placeholder="Search plants..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="m21 21-4.3-4.3"></path>
+                </svg>
+              </div>
+            </div>
+            <div className="w-full sm:w-48">
+              <Select
+                value={filter}
+                onValueChange={(value) => setFilter(value)}
+              >
+                <SelectTrigger className="w-full bg-white dark:bg-card border border-gray-200 dark:border-gray-800 rounded-lg">
+                  <span className="flex items-center">
+                    <Filter className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="All Plants" />
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Plants</SelectItem>
+                  <SelectItem value="needs-attention">Need Attention</SelectItem>
+                  <SelectItem value="healthy">Healthy</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          {/* Plants Grid */}
+          {isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="bg-white dark:bg-card rounded-xl overflow-hidden shadow-natural animate-pulse">
+                  <div className="w-full h-48 bg-gray-200 dark:bg-gray-700"></div>
+                  <div className="p-5 space-y-4">
+                    <div className="flex justify-between">
+                      <div className="h-6 w-1/2 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                      <div className="h-6 w-1/4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    </div>
+                    <div className="h-4 w-1/3 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    <div className="space-y-3">
+                      {[...Array(3)].map((_, j) => (
+                        <div key={j} className="flex justify-between items-center">
+                          <div className="h-4 w-1/4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                          <div className="h-2 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredPlants.length === 0 ? (
+            <div className="text-center py-16 bg-white dark:bg-card rounded-lg shadow-natural">
+              {searchQuery ? (
+                <>
+                  <h3 className="text-lg font-poppins font-semibold mb-2">No plants found</h3>
+                  <p className="text-muted-foreground mb-6">No plants match your search criteria.</p>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setSearchQuery("")}
+                  >
+                    Clear Search
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-poppins font-semibold mb-2">No plants yet</h3>
+                  <p className="text-muted-foreground mb-6">Add your first plant to get started.</p>
+                  <Button 
+                    className="bg-primary hover:bg-primary-light text-white"
+                    onClick={handleAddPlant}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    <span>Add Your First Plant</span>
+                  </Button>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredPlants.map((plant) => (
+                <PlantCard
+                  key={plant.id}
+                  plant={plant}
+                  healthMetrics={healthMetrics[plant.id]}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+      
+      {/* Mobile Navigation */}
+      <MobileNavigation />
+      
+      {/* Add Plant Modal */}
+      <AddPlantModal 
+        isOpen={isAddPlantModalOpen}
+        onClose={() => setIsAddPlantModalOpen(false)}
+        userId={userId}
+      />
+    </div>
+  );
+}

@@ -35,6 +35,12 @@ export function AddPlantModal({ isOpen, onClose, userId }: AddPlantModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Get current date as YYYY-MM-DD format for default value
+  const getTodayFormatted = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
+  };
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -46,7 +52,8 @@ export function AddPlantModal({ isOpen, onClose, userId }: AddPlantModalProps) {
       waterFrequencyDays: 7,
       lightRequirement: "medium",
       status: "healthy",
-      lastWatered: new Date(),
+      // Use string date format instead of Date object
+      lastWatered: getTodayFormatted(),
     },
   });
 
@@ -54,14 +61,9 @@ export function AddPlantModal({ isOpen, onClose, userId }: AddPlantModalProps) {
     setIsSubmitting(true);
     
     try {
-      // Convert the Date object to ISO string format for API compatibility
-      const formattedData = {
-        ...values,
-        // Format the date as ISO string if it exists
-        lastWatered: values.lastWatered ? values.lastWatered.toISOString() : null
-      };
-      
-      await apiRequest("POST", "/api/plants", formattedData);
+      // Send the data as-is without date conversion
+      // The server will handle the string date format directly
+      await apiRequest("POST", "/api/plants", values);
       
       toast({
         title: "Success",

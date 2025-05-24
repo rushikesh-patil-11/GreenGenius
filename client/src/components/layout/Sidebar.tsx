@@ -1,4 +1,4 @@
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Leaf, Home, Droplet, Calendar, Clock, Lightbulb, Settings } from "lucide-react";
 
@@ -11,10 +11,24 @@ export function Sidebar() {
 
   const linkClass = (path: string) => {
     return cn(
-      "flex items-center p-3 rounded-lg transition-colors",
+      "flex items-center p-3 rounded-lg transition-colors cursor-pointer",
       isActive(path)
         ? "text-textColor bg-primary/10"
         : "text-textColor hover:bg-gray-100 dark:hover:bg-gray-800"
+    );
+  };
+
+  // Navigation item component to avoid nested anchor tags
+  const NavItem = ({ path, icon, label }: { path: string, icon: React.ReactNode, label: string }) => {
+    const handleClick = () => {
+      window.location.href = path;
+    };
+    
+    return (
+      <div onClick={handleClick} className={linkClass(path)}>
+        {icon}
+        <span className="ml-3 font-medium font-poppins">{label}</span>
+      </div>
     );
   };
 
@@ -28,44 +42,38 @@ export function Sidebar() {
       </div>
       <nav className="px-4 pt-6">
         <div className="space-y-4">
-          <Link href="/dashboard">
-            <a className={linkClass("/dashboard")}>
-              <Home className="text-primary text-xl" />
-              <span className="ml-3 font-medium font-poppins">Dashboard</span>
-            </a>
-          </Link>
-          <Link href="/plants">
-            <a className={linkClass("/plants")}>
-              <Leaf className="text-xl" />
-              <span className="ml-3 font-medium font-poppins">My Plants</span>
-            </a>
-          </Link>
-          <Link href="/schedule">
-            <a className={linkClass("/schedule")}>
-              <Calendar className="text-xl" />
-              <span className="ml-3 font-medium font-poppins">Care Schedule</span>
-            </a>
-          </Link>
-          <Link href="/history">
-            <a className={linkClass("/history")}>
-              <Clock className="text-xl" />
-              <span className="ml-3 font-medium font-poppins">Care History</span>
-            </a>
-          </Link>
-          <Link href="/recommendations">
-            <a className={linkClass("/recommendations")}>
-              <Lightbulb className="text-xl" />
-              <span className="ml-3 font-medium font-poppins">AI Recommendations</span>
-            </a>
-          </Link>
+          <NavItem 
+            path="/dashboard" 
+            icon={<Home className="text-primary text-xl" />} 
+            label="Dashboard" 
+          />
+          <NavItem 
+            path="/plants" 
+            icon={<Leaf className="text-xl" />} 
+            label="My Plants" 
+          />
+          <NavItem 
+            path="/schedule" 
+            icon={<Calendar className="text-xl" />} 
+            label="Care Schedule" 
+          />
+          <NavItem 
+            path="/history" 
+            icon={<Clock className="text-xl" />} 
+            label="Care History" 
+          />
+          <NavItem 
+            path="/recommendations" 
+            icon={<Lightbulb className="text-xl" />} 
+            label="AI Recommendations" 
+          />
         </div>
         <div className="absolute bottom-0 left-0 right-0 p-4">
-          <Link href="/settings">
-            <a className="flex items-center p-3 text-textColor hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
-              <Settings className="text-xl" />
-              <span className="ml-3 font-medium font-poppins">Settings</span>
-            </a>
-          </Link>
+          <NavItem 
+            path="/settings" 
+            icon={<Settings className="text-xl" />} 
+            label="Settings" 
+          />
         </div>
       </nav>
     </aside>

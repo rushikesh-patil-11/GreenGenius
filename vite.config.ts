@@ -30,5 +30,14 @@ export default defineConfig({
   },
   css: {
     postcss: './postcss.config.js' // Path relative to vite.config.ts (project root)
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+        secure: false, 
+      }
+    }
   }
 });

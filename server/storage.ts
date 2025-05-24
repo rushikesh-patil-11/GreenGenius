@@ -8,10 +8,77 @@ import {
   PlantHealthMetric, InsertPlantHealthMetric
   // Table objects (users, plants, etc.) will be accessed via schema.users, schema.plants
 } from "../shared/schema";
-import { eq, desc, sql, and, gte, lte, isNull, inArray, lt } from "drizzle-orm"; // Restored missing operators, added lt
+import { eq, desc, sql, and, gte, lte, isNull, inArray, lt, gt, asc } from "drizzle-orm"; // Restored missing operators, added lt
 import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js'; 
 import postgres from 'postgres';
 import * as schema from "../shared/schema"; // Import all schema for DB typing
+
+// For upcoming tasks displayed on the dashboard
+export interface UpcomingTaskDisplay extends CareTask {
+  plantName?: string; // Name of the plant associated with the task
+}
+
+// For recent activities displayed on the dashboard
+export interface CareHistoryDisplay extends CareHistory {
+  plantName?: string; // Name of the plant associated with the activity
+}
+
+// For the overall dashboard statistics
+export interface DashboardStats {
+  totalPlants: number;
+  plantsNeedingCare: number; 
+  upcomingTasks: UpcomingTaskDisplay[];
+  recentActivities: CareHistoryDisplay[];
+}
+
+// Helper to map string health status to a numeric value for storage
+const healthStatusToNumeric = (statusString: string): number => {
+  switch (statusString) {
+    case 'healthy': return 100;
+    case 'needs_care': return 70;
+    case 'needs_attention': return 40;
+    default: return 75; // Default for unknown or other statuses
+  }
+};
+
+// Define global variables for the database client and instance
+// These will be initialized by the initializeDatabase function
+let dbClient: postgres.Sql<{}>;
+let globalDbInstance: PostgresJsDatabase<typeof schema>;
+
+// Function to initialize the database connection
+export function initializeDatabase() {
+  const connectionString = process.env.DATABASE_URL;
+  console.log('[storage.ts] Attempting to initialize database...');
+  // Log the length and a non-sensitive portion of the connection string for verification
+  if (connectionString) {
+    console.log(`[storage.ts] Retrieved DATABASE_URL. Length: ${connectionString.length}. Starts with: ${connectionString.substring(0, connectionString.indexOf('@') > 0 ? connectionString.indexOf('@') : 30)}`);
+  } else {
+    console.log('[storage.ts] Retrieved DATABASE_URL is undefined or empty.');
+  }
+
+  if (!connectionString) {
+    console.error('[storage.ts] ERROR: DATABASE_URL is not set in environment variables. Database cannot be initialized.');
+    throw new Error('DATABASE_URL is not set. Please check your .env file and server start_up sequence.');
+  }
+
+  try {
+    // Add a simple onnotice handler to potentially catch more info or prevent default logging issues
+    // You can also add a debug hook for more detailed query logging if needed later
+    dbClient = postgres(connectionString, {
+      onnotice: (notice) => { /* console.log('[Postgres Notice]', notice) */ },
+      // debug: (connection, query, params, types) => {
+      //   console.log('[Postgres Debug]', query, params);
+      // }
+    });
+    globalDbInstance = drizzle(dbClient, { schema });
+    console.log('[storage.ts] Database client and Drizzle instance initialized successfully.');
+  } catch (error) {
+    console.error('[storage.ts] ERROR: Failed to initialize postgres client or Drizzle instance:', error);
+    console.error('[storage.ts] Connection String used:', connectionString); // Log the connection string on error
+    throw error; // Re-throw the error to halt server startup if DB connection fails
+  }
+}
 
 // Define interface for storage operations
 export interface IStorage {
@@ -49,10 +116,10 @@ export interface IStorage {
 
   // Plant health metrics
   getPlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined>;
-  updatePlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined>;
+  updatePlantHealthMetrics(plantId: number, metrics?: Partial<InsertPlantHealthMetric>): Promise<PlantHealthMetric | undefined>;
 
   // Dashboard stats
-  getDashboardStats(userId: number): Promise<any>;
+  getDashboardStats(userId: number): Promise<DashboardStats>;
 }
 
 // Memory storage implementation
@@ -93,9 +160,10 @@ export class MemStorage implements IStorage {
     // Initialize with a demo user
     this.createUser({
       username: "demo",
-      password: "password",
+      password: "password", // Note: In a real app, hash passwords
       email: "demo@example.com",
-      name: "Alex"
+      name: "Alex",
+      clerkId: "user_demo_clerk_id" // Added clerkId for consistency
     });
 
     // Add some sample plants
@@ -350,8 +418,8 @@ export class MemStorage implements IStorage {
     return Array.from(this.recommendations.values())
       .filter(rec => rec.userId === userId && !rec.applied)
       .sort((a, b) => {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : Number.MIN_SAFE_INTEGER;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : Number.MIN_SAFE_INTEGER;
+        const timeA = a.createdAt instanceof Date ? a.createdAt.getTime() : Number.MIN_SAFE_INTEGER;
+        const timeB = b.createdAt instanceof Date ? b.createdAt.getTime() : Number.MIN_SAFE_INTEGER;
         return timeB - timeA; // Sorts newest first; nulls will be oldest
       });
   }
@@ -451,116 +519,107 @@ export class MemStorage implements IStorage {
 
   // Plant health metrics
   async getPlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined> {
-    return Array.from(this.plantHealthMetrics.values())
-      .find(metric => metric.plantId === plantId);
+    return this.plantHealthMetrics.get(plantId);
   }
 
-  async updatePlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined> {
-    const plant = await this.getPlantById(plantId);
+  async updatePlantHealthMetrics(plantId: number, metricsInput?: Partial<schema.InsertPlantHealthMetric>): Promise<schema.PlantHealthMetric | undefined> {
+    const plant = this.plants.get(plantId);
     if (!plant) return undefined;
 
-    // Calculate water level based on last watered date and watering frequency
-    let waterLevel = 100;
-    if (plant.lastWatered && plant.waterFrequencyDays) {
-      const daysSinceWatered = Math.floor((Date.now() - new Date(plant.lastWatered).getTime()) / (24 * 60 * 60 * 1000));
-      waterLevel = Math.max(0, 100 - (daysSinceWatered / plant.waterFrequencyDays * 100));
-    }
+    const plantOverallHealthStatusString = plant.lastWatered && (new Date().getTime() - plant.lastWatered.getTime()) / (1000 * 60 * 60 * 24) > (plant.waterFrequencyDays ?? 7) + 2
+      ? 'needs_attention'
+      : 'healthy';
+    
+    const existingMetric = this.plantHealthMetrics.get(plantId);
 
-    // Determine light level based on plant requirements
-    let lightLevel = 75;
-    if (plant.lightRequirement === "low") {
-      lightLevel = 90;
-    } else if (plant.lightRequirement === "high") {
-      lightLevel = 60;
-    }
+    // 'issues' and 'recommendations' are not part of plantHealthMetrics schema.
+    // They should be handled via the 'recommendations' table or derived dynamically.
 
-    // Calculate overall health as an average of water and light levels
-    const overallHealth = Math.round((waterLevel + lightLevel) / 2);
-
-    // Find existing metrics or create new ones
-    const existingMetrics = await this.getPlantHealthMetrics(plantId);
-    const id = existingMetrics ? existingMetrics.id : this.metricId++;
-
-    const metrics: PlantHealthMetric = {
-      id,
+    const newMetricData = {
       plantId,
-      waterLevel: Math.round(waterLevel),
-      lightLevel: Math.round(lightLevel),
-      overallHealth,
-      updatedAt: new Date()
-    };
+      overallHealth: metricsInput?.overallHealth ?? existingMetric?.overallHealth ?? healthStatusToNumeric(plantOverallHealthStatusString),
+      // lastChecked was incorrect, schema uses updatedAt
+      updatedAt: new Date(), 
+      waterLevel: metricsInput?.waterLevel ?? existingMetric?.waterLevel ?? null,
+      lightLevel: metricsInput?.lightLevel ?? existingMetric?.lightLevel ?? null,
+      // issues: undefined, // Not in schema
+      // recommendations: undefined, // Not in schema
+    } as Omit<schema.PlantHealthMetric, 'id'>; // Ensure this matches schema.PlantHealthMetric excluding 'id'
 
-    this.plantHealthMetrics.set(id, metrics);
-    return metrics;
+    if (existingMetric) {
+      // Ensure we only spread properties that exist on existingMetric and newMetricData aligns with PlantHealthMetric
+      const updatedMetric: schema.PlantHealthMetric = { 
+        ...existingMetric, 
+        plantId: newMetricData.plantId,
+        overallHealth: newMetricData.overallHealth,
+        updatedAt: newMetricData.updatedAt,
+        waterLevel: newMetricData.waterLevel,
+        lightLevel: newMetricData.lightLevel,
+      };
+      this.plantHealthMetrics.set(plantId, updatedMetric);
+      return updatedMetric;
+    } else {
+      const newDbMetric: schema.PlantHealthMetric = {
+        id: this.metricId++, // Assign new ID only for new metrics
+        plantId: newMetricData.plantId,
+        overallHealth: newMetricData.overallHealth,
+        updatedAt: newMetricData.updatedAt,
+        waterLevel: newMetricData.waterLevel,
+        lightLevel: newMetricData.lightLevel,
+      };
+      this.plantHealthMetrics.set(plantId, newDbMetric);
+      return newDbMetric;
+    }
   }
 
   // Dashboard stats
   async getDashboardStats(userId: number): Promise<any> {
-    const plants = await this.getPlantsByUserId(userId);
-    const tasks = await this.getCareTasksByUserId(userId);
-    const latestReading = await this.getLatestEnvironmentReadingByUserId(userId);
-    const recommendations = await this.getRecommendationsByUserId(userId);
+    const userPlants = Array.from(this.plants.values()).filter(p => p.userId === userId);
+    const userCareTasks = Array.from(this.careTasks.values()).filter(ct => userPlants.some(p => p.id === ct.plantId));
+    const userCareHistory = Array.from(this.careHistory.values()).filter(ch => userPlants.some(p => p.id === ch.plantId));
 
-    // Plants needing water in the next 24 hours
-    const plantsNeedingWater = tasks
-      .filter(task => 
-        task.taskType === 'water' && 
-        new Date(task.dueDate).getTime() <= Date.now() + 24 * 60 * 60 * 1000
-      )
-      .length;
+    const upcomingTasks = userCareTasks
+      // Assuming CareTask has 'completed' and 'skipped' booleans, and no 'status' field
+      .filter(t => t.dueDate && t.dueDate > new Date() && !t.completed && !t.skipped)
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .slice(0, 5);
 
-    // Calculate average plant health
-    let totalHealth = 0;
-    let healthyPlants = 0;
-
-    for (const plant of plants) {
-      const health = await this.getPlantHealthMetrics(plant.id);
-      if (health && typeof health.overallHealth === 'number') {
-        totalHealth += health.overallHealth;
-        if (health.overallHealth >= 75) {
-          healthyPlants++;
-        }
-      }
-    }
-
-    const averageHealth = plants.length > 0 ? 
-      Math.round(totalHealth / plants.length) : 0;
-    let healthStatus = "Good";
-    if (averageHealth < 50) healthStatus = "Poor";
-    else if (averageHealth < 75) healthStatus = "Fair";
-
-    // Get new plants added this month
-    const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const newPlantsThisMonth = plants.filter(plant => 
-      plant.acquiredDate && new Date(plant.acquiredDate) >= firstDayOfMonth
-    ).length;
+    const recentActivities = userCareHistory
+      .sort((a,b) => (b.performedAt ? b.performedAt.getTime() : 0) - (a.performedAt ? a.performedAt.getTime() : 0))
+      .slice(0,5);
 
     return {
-      totalPlants: plants.length,
-      plantsNeedingWater,
-      healthStatus,
-      healthPercentage: averageHealth,
-      upcomingTasks: tasks.length,
-      newPlantsThisMonth,
-      environmentReadings: latestReading || {},
-      recommendations: recommendations.slice(0, 2) // Return only 2 most recent recommendations
+      totalPlants: userPlants.length,
+      plantsHealthy: userPlants.filter(p => p.status === 'healthy').length,
+      plantsNeedCare: userPlants.filter(p => p.status === 'needs_care' || p.status === 'needs_attention').length,
+      upcomingTasks: upcomingTasks.map(t => ({
+        ...t,
+        plantName: this.plants.get(t.plantId)?.name,
+        dueDate: t.dueDate ? new Date(t.dueDate) : null,
+      })),
+      recentActivities: recentActivities.map(a => ({
+        ...a,
+        plantName: this.plants.get(a.plantId)?.name,
+        performedAt: a.performedAt ? new Date(a.performedAt) : null,
+      })),
     };
   }
 }
 
-// Initialize database connection
-const connectionString = process.env.DATABASE_URL as string;
-console.log('Attempting to connect with DATABASE_URL:', connectionString); // Added for debugging
-const client = postgres(connectionString);
-const globalDbInstance: PostgresJsDatabase<typeof schema> = drizzle(client, { schema }); // Explicitly typed global instance
-
 // Database storage implementation
 export class DbStorage implements IStorage {
-  private db: PostgresJsDatabase<typeof schema>; // Correctly typed db member
+  // private db: PostgresJsDatabase<typeof schema>;
+  // constructor() {
+  //   this.db = globalDbInstance; // Initialize instance db with the global one
+  // }
 
-  constructor() {
-    this.db = globalDbInstance; // Initialize instance db with the global one
+  // Use a getter to ensure the db instance is accessed only after initialization
+  private get db(): PostgresJsDatabase<typeof schema> {
+    if (!globalDbInstance) {
+      console.error('[storage.ts] DbStorage.db accessed before database was initialized. This should not happen if initializeDatabase() was called correctly at startup.');
+      throw new Error('Database not initialized. Critical startup error.');
+    }
+    return globalDbInstance;
   }
 
   // User operations
@@ -699,9 +758,11 @@ export class DbStorage implements IStorage {
     if (!updatedTask) return undefined;
 
     // Create a care history record
+    // 'performedAt' is set by default in the DB schema, so we don't pass it here.
     await this.createCareHistory({
       plantId: updatedTask.plantId,
       actionType: `completed_${updatedTask.taskType}`,
+      // performedAt: new Date(), // Removed: defaultNow() in schema
     });
 
     // If it's a watering task, update plant's lastWatered and create a new recurring task
@@ -710,10 +771,12 @@ export class DbStorage implements IStorage {
       if (plant && plant.waterFrequencyDays) {
         const nextDueDate = new Date(updatedTask.completedDate || Date.now()); // base on completion time
         nextDueDate.setDate(nextDueDate.getDate() + plant.waterFrequencyDays);
+        
         await this.createCareTask({
           plantId: plant.id,
           taskType: "water",
-          dueDate: nextDueDate
+          dueDate: nextDueDate,
+          // Other fields like 'notes' can be omitted or set to default
         });
         // Update lastWatered for the plant
         await this.updatePlant(plant.id, { ...plant, lastWatered: new Date(updatedTask.completedDate || Date.now()) });
@@ -721,7 +784,8 @@ export class DbStorage implements IStorage {
     }
     return {
       ...updatedTask,
-      dueDate: updatedTask.dueDate ? new Date(updatedTask.dueDate) : new Date(),
+      // Ensure Date fields are actual Date objects if they come from DB as strings/numbers
+      dueDate: updatedTask.dueDate ? new Date(updatedTask.dueDate) : new Date(), 
       completedDate: updatedTask.completedDate ? new Date(updatedTask.completedDate) : null,
     } as CareTask;
   }
@@ -732,18 +796,10 @@ export class DbStorage implements IStorage {
       .set({ skipped: true })
       .where(eq(schema.careTasks.id, id))
       .returning();
-    
     if (!updatedTask) return undefined;
-
-    // Create a care history record
-    await this.createCareHistory({
-      plantId: updatedTask.plantId,
-      actionType: `skipped_${updatedTask.taskType}`,
-    });
-
     return {
       ...updatedTask,
-      dueDate: updatedTask.dueDate ? new Date(updatedTask.dueDate) : new Date(),
+      dueDate: updatedTask.dueDate ? new Date(updatedTask.dueDate) : new Date(), // Ensure dueDate is a Date
       completedDate: updatedTask.completedDate ? new Date(updatedTask.completedDate) : null,
     } as CareTask;
   }
@@ -794,9 +850,11 @@ export class DbStorage implements IStorage {
       const plant = await this.getPlantById(recommendation.plantId);
       if (plant) {
         await this.updatePlant(plant.id, { ...plant, lastWatered: new Date() });
+        // 'performedAt' is set by default in the DB schema, so we don't pass it here.
         await this.createCareHistory({
           plantId: plant.id,
           actionType: 'water_recommended',
+          // performedAt: new Date(), // Removed: defaultNow() in schema
         });
       }
     }
@@ -809,87 +867,44 @@ export class DbStorage implements IStorage {
   }
 
   async generateRecommendations(userId: number): Promise<void> {
-    const userPlants = await this.getPlantsByUserId(userId);
-    const latestReading = await this.getLatestEnvironmentReadingByUserId(userId);
+    // 1. Fetch all plants for the user
+    const userPlants = await this.db
+      .select()
+      .from(schema.plants)
+      .where(eq(schema.plants.userId, userId));
+
+    const now = new Date();
 
     for (const plant of userPlants) {
-      if (!plant.id) continue;
-
-      // Basic Watering Recommendation
+      // 2. Check for watering recommendations
       if (plant.lastWatered && plant.waterFrequencyDays) {
-        const daysSinceLastWatered = (Date.now() - new Date(plant.lastWatered).getTime()) / (1000 * 3600 * 24);
-        if (daysSinceLastWatered > plant.waterFrequencyDays) {
-          await this.createRecommendation({
-            userId,
-            plantId: plant.id,
-            recommendationType: 'water',
-            message: `Time to water ${plant.name}. It was last watered ${Math.floor(daysSinceLastWatered)} days ago.`
+        const lastWateredTime = new Date(plant.lastWatered).getTime();
+        const overdueTime = lastWateredTime + plant.waterFrequencyDays * 24 * 60 * 60 * 1000;
+        
+        // If current time is past the overdue time + a 2-day grace period (example)
+        if (now.getTime() > overdueTime + (2 * 24 * 60 * 60 * 1000)) {
+          // Check if a similar recommendation already exists and is not applied
+          const existingRec = await this.db.query.recommendations.findFirst({
+            where: and(
+              eq(schema.recommendations.userId, userId),
+              eq(schema.recommendations.plantId, plant.id),
+              eq(schema.recommendations.recommendationType, 'water'),
+              eq(schema.recommendations.applied, false)
+            )
           });
+
+          if (!existingRec) {
+            await this.createRecommendation({
+              userId: userId,
+              plantId: plant.id,
+              recommendationType: 'water',
+              message: `Your ${plant.name} is overdue for watering. Last watered on ${new Date(plant.lastWatered).toLocaleDateString()}.`,
+              // 'applied' and 'createdAt' will be set by default by createRecommendation or schema
+            });
+          }
         }
       }
-
-      // Basic Light Recommendation (Example - can be more sophisticated)
-      if (latestReading && latestReading.lightLevel && plant.lightRequirement) {
-        if (latestReading.lightLevel === 'low' && (plant.lightRequirement === 'medium' || plant.lightRequirement === 'high')) {
-          await this.createRecommendation({
-            userId,
-            plantId: plant.id,
-            recommendationType: 'light',
-            message: `${plant.name} might need more light. Current room light level is low, but it prefers ${plant.lightRequirement} light.`
-          });
-        }
-        if (latestReading.lightLevel === 'high' && (plant.lightRequirement === 'medium' || plant.lightRequirement === 'low')) {
-          await this.createRecommendation({
-            userId,
-            plantId: plant.id,
-            recommendationType: 'light',
-            message: `${plant.name} might be getting too much light. Current room light level is high, but it prefers ${plant.lightRequirement} light.`
-          });
-        }
-      }
-      // Add more recommendation logic (temperature, humidity, etc.) here
-    }
-  }
-
-  // Helper method for generating basic recommendations without AI
-  async generateBasicRecommendations(
-    userId: number, 
-    plant: Plant, 
-    latestReading: EnvironmentReading | undefined // Make latestReading optional
-  ): Promise<void> {
-    if (!plant.id) return;
-
-    // Basic Watering Recommendation
-    if (plant.lastWatered && plant.waterFrequencyDays) {
-      const daysSinceLastWatered = (Date.now() - new Date(plant.lastWatered).getTime()) / (1000 * 3600 * 24);
-      if (daysSinceLastWatered > plant.waterFrequencyDays) {
-        await this.createRecommendation({
-          userId,
-          plantId: plant.id,
-          recommendationType: 'water',
-          message: `Time to water ${plant.name}. It was last watered ${Math.floor(daysSinceLastWatered)} days ago.`
-        });
-      }
-    }
-
-    // Basic Light Recommendation
-    if (latestReading && latestReading.lightLevel && plant.lightRequirement) {
-      if (latestReading.lightLevel === 'low' && (plant.lightRequirement === 'medium' || plant.lightRequirement === 'high')) {
-        await this.createRecommendation({
-          userId,
-          plantId: plant.id,
-          recommendationType: 'light',
-          message: `${plant.name} might need more light. Current room light level is low, but it prefers ${plant.lightRequirement} light.`
-        });
-      }
-      if (latestReading.lightLevel === 'high' && (plant.lightRequirement === 'medium' || plant.lightRequirement === 'low')) {
-        await this.createRecommendation({
-          userId,
-          plantId: plant.id,
-          recommendationType: 'light',
-          message: `${plant.name} might be getting too much light. Current room light level is high, but it prefers ${plant.lightRequirement} light.`
-        });
-      }
+      // TODO: Add other recommendation types (e.g., light, fertilization) based on plant properties or health metrics
     }
   }
 
@@ -914,15 +929,13 @@ export class DbStorage implements IStorage {
 
   // Helper to get all care history for a user's plants (e.g., for a full activity feed)
   async getAllUserCareHistory(userId: number): Promise<CareHistory[]> {
-    const historyResult = await this.db.select({
+    const historyResult = await this.db
+      .select({
         id: schema.careHistory.id,
         plantId: schema.careHistory.plantId,
         actionType: schema.careHistory.actionType,
         performedAt: schema.careHistory.performedAt,
-        notes: schema.careHistory.notes, // Added notes to the select
-        // plantName is selected because the join needs it for the where clause, 
-        // but it won't be part of the final CareHistory object.
-        plantName: schema.plants.name 
+        notes: schema.careHistory.notes,
       })
       .from(schema.careHistory)
       .innerJoin(schema.plants, eq(schema.careHistory.plantId, schema.plants.id))
@@ -933,10 +946,9 @@ export class DbStorage implements IStorage {
       id: h.id,
       plantId: h.plantId,
       actionType: h.actionType,
-      notes: h.notes, // Map notes to the result object
-      performedAt: h.performedAt ? new Date(h.performedAt) : null, // Preserve null if original was null
-      // plantName is omitted to strictly match the CareHistory type
-    })) as CareHistory[]; // Cast to CareHistory[]
+      notes: h.notes,
+      performedAt: h.performedAt ? new Date(h.performedAt) : null,
+    })) as CareHistory[];
   }
 
   // Plant health metrics
@@ -983,64 +995,105 @@ export class DbStorage implements IStorage {
   }
 
   // Dashboard stats
-  async getDashboardStats(userId: number): Promise<any> {
-    const userPlants = await this.db.select().from(schema.plants).where(eq(schema.plants.userId, userId));
-    const upcomingTasks = await this.db.select().from(schema.careTasks)
-      .innerJoin(schema.plants, eq(schema.careTasks.plantId, schema.plants.id))
-      .where(and(
-        eq(schema.plants.userId, userId),
-        eq(schema.careTasks.completed, false),
-        eq(schema.careTasks.skipped, false),
-        gte(schema.careTasks.dueDate, new Date()) // Tasks due today or in the future
-      ))
-      .orderBy(schema.careTasks.dueDate)
-      .limit(5);
+  async getDashboardStats(userId: number): Promise<DashboardStats> {
+    // 1. Total Plants
+    const totalPlantsResult = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(schema.plants)
+      .where(eq(schema.plants.userId, userId));
+    const totalPlants = totalPlantsResult[0]?.count || 0;
 
-    const overdueTasks = await this.db.select().from(schema.careTasks)
-      .innerJoin(schema.plants, eq(schema.careTasks.plantId, schema.plants.id))
-      .where(and(
-        eq(schema.plants.userId, userId),
-        eq(schema.careTasks.completed, false),
-        eq(schema.careTasks.skipped, false),
-        isNull(schema.careTasks.completedDate), // Ensure not completed
-        isNull(schema.careTasks.skipped), // Ensure not skipped
-        lt(schema.careTasks.dueDate, new Date()) // Tasks due in the past
-      ))
-      .orderBy(desc(schema.careTasks.dueDate));
-
-    const recentActivity = await this.db.select().from(schema.careHistory)
-      .innerJoin(schema.plants, eq(schema.careHistory.plantId, schema.plants.id))
-      .where(and(
-        eq(schema.plants.userId, userId),
-        isNull(schema.careHistory.actionType) // This condition might need adjustment based on desired activity
-      ))
-      .orderBy(desc(schema.careHistory.performedAt))
-      .limit(5);
-
-    const plantsNeedingAttention = userPlants.filter(p => p.status === 'needs_care' || p.status === 'unhealthy').length;
-
-    // Plant health summary (average health)
-    const healthMetrics = await this.db.select({
-        overallHealth: schema.plantHealthMetrics.overallHealth
-      })
-      .from(schema.plantHealthMetrics)
-      .innerJoin(schema.plants, eq(schema.plantHealthMetrics.plantId, schema.plants.id))
+    // 2. Plants Needing Care (example: overdue for watering)
+    // This requires a more complex query or iterating through plants if not directly stored.
+    // For simplicity, let's count plants where lastWatered + waterFrequencyDays < now
+    const userPlantsForCareCheck = await this.db
+      .select({ id: schema.plants.id, lastWatered: schema.plants.lastWatered, waterFrequencyDays: schema.plants.waterFrequencyDays })
+      .from(schema.plants)
       .where(eq(schema.plants.userId, userId));
     
-    const avgHealth = healthMetrics.length > 0 ? 
-      healthMetrics.reduce((sum, m) => sum + (m.overallHealth || 0), 0) / healthMetrics.length : 0;
+    let plantsNeedingCare = 0;
+    const now = new Date();
+    for (const plant of userPlantsForCareCheck) {
+      if (plant.lastWatered && plant.waterFrequencyDays) {
+        const lastWateredTime = new Date(plant.lastWatered).getTime();
+        const overdueTime = lastWateredTime + plant.waterFrequencyDays * 24 * 60 * 60 * 1000;
+        
+        // If current time is past the overdue time + a 2-day grace period (example)
+        if (now.getTime() > overdueTime) {
+          plantsNeedingCare++;
+        }
+      }
+    }
+
+    // 3. Upcoming Tasks (Top 5, not completed, not skipped, future due date)
+    const upcomingTasksResult = await this.db
+      .select({
+        id: schema.careTasks.id,
+        plantId: schema.careTasks.plantId,
+        taskType: schema.careTasks.taskType,
+        dueDate: schema.careTasks.dueDate,
+        completed: schema.careTasks.completed,
+        completedDate: schema.careTasks.completedDate, // Select completedDate
+        skipped: schema.careTasks.skipped,
+        // We need plantName for display, so join with plants table
+        plantName: schema.plants.name 
+      })
+      .from(schema.careTasks)
+      .innerJoin(schema.plants, eq(schema.careTasks.plantId, schema.plants.id))
+      .where(and(
+        eq(schema.plants.userId, userId),
+        eq(schema.careTasks.completed, false),
+        eq(schema.careTasks.skipped, false),
+        gt(schema.careTasks.dueDate, now) // Due date is in the future
+      ))
+      .orderBy(asc(schema.careTasks.dueDate))
+      .limit(5);
+
+    const upcomingTasks: UpcomingTaskDisplay[] = upcomingTasksResult.map(task => ({
+      id: task.id,
+      plantId: task.plantId,
+      taskType: task.taskType,
+      dueDate: task.dueDate ? new Date(task.dueDate) : new Date(), // Ensure it's a Date
+      completed: task.completed,
+      completedDate: task.completedDate ? new Date(task.completedDate) : null, // Add completedDate
+      skipped: task.skipped,
+      plantName: task.plantName ?? 'Unknown Plant', // Add plantName
+    }));
+
+    // 4. Recent Activities (Top 5)
+    const recentActivitiesResult = await this.db
+      .select({
+        id: schema.careHistory.id,
+        plantId: schema.careHistory.plantId,
+        actionType: schema.careHistory.actionType,
+        performedAt: schema.careHistory.performedAt,
+        notes: schema.careHistory.notes,
+        plantName: schema.plants.name
+      })
+      .from(schema.careHistory)
+      .innerJoin(schema.plants, eq(schema.careHistory.plantId, schema.plants.id))
+      .where(eq(schema.plants.userId, userId))
+      .orderBy(desc(schema.careHistory.performedAt))
+      .limit(5);
+    
+    const recentActivities: CareHistoryDisplay[] = recentActivitiesResult.map(activity => ({
+      id: activity.id,
+      plantId: activity.plantId,
+      actionType: activity.actionType,
+      notes: activity.notes,
+      performedAt: activity.performedAt ? new Date(activity.performedAt) : null,
+      plantName: activity.plantName ?? 'Unknown Plant',
+    }));
 
     return {
-      totalPlants: userPlants.length,
-      upcomingTasksCount: upcomingTasks.length,
-      overdueTasksCount: overdueTasks.length,
-      plantsNeedingAttention,
-      averagePlantHealth: Math.round(avgHealth),
-      upcomingTasksList: upcomingTasks.map(t => ({ ...t.care_tasks, plantName: t.plants.name, dueDate: t.care_tasks.dueDate ? new Date(t.care_tasks.dueDate) : null })),
-      recentActivityList: recentActivity.map(a => ({ ...a.care_history, plantName: a.plants.name, performedAt: a.care_history.performedAt ? new Date(a.care_history.performedAt) : null }))
+      totalPlants,
+      plantsNeedingCare,
+      upcomingTasks,
+      recentActivities,
     };
   }
 }
 
 // Initialize database storage
+// The actual DB connection is now deferred to initializeDatabase()
 export const storage = new DbStorage();

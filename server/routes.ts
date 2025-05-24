@@ -84,14 +84,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Plants routes
-  app.get('/api/plants', async (req, res) => {
+  app.get('/api/plants', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const userId = parseInt(req.query.userId as string);
-      if (isNaN(userId)) {
-        return res.status(400).json({ error: 'Valid userId is required' });
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for GET /api/plants' });
+      }
+      const clerkId = req.auth.userId;
+
+      // Fetch user details from Clerk (consistent with POST /api/plants)
+      // This step is crucial if getOrCreateUserByClerkId needs to create a user.
+      // For a pure GET, if the user must exist, a getUserByClerkId might be better,
+      // but we'll follow the existing pattern for now.
+      const clerkUser = await clerkClient.users.getUser(clerkId);
+      if (!clerkUser) {
+        // This case should ideally not be hit if ClerkExpressRequireAuth works correctly
+        // and the user exists in Clerk.
+        return res.status(404).json({ error: 'Authenticated user not found in Clerk' });
       }
 
-      const plants = await storage.getPlantsByUserId(userId);
+      // Get or create user in local database to retrieve internal appUser.id
+      const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '',
+        username: clerkUser.username,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+      });
+
+      if (!appUser || !appUser.id) {
+        return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
+      }
+
+      const plants = await storage.getPlantsByUserId(appUser.id);
       return res.json(plants);
     } catch (error) {
       return handleError(res, error);
@@ -215,31 +238,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Environment readings routes
-  app.get('/api/environment', async (req, res) => {
+  app.get('/api/environment', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const userId = parseInt(req.query.userId as string);
-      if (isNaN(userId)) {
-        return res.status(400).json({ error: 'Valid userId is required' });
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for GET /api/environment' });
+      }
+      const clerkId = req.auth.userId;
+
+      const clerkUser = await clerkClient.users.getUser(clerkId);
+      if (!clerkUser) {
+        return res.status(404).json({ error: 'Authenticated user not found in Clerk' });
       }
 
-      const readings = await storage.getLatestEnvironmentReadingByUserId(userId);
+      const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '',
+        username: clerkUser.username,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+      });
+
+      if (!appUser || !appUser.id) {
+        return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
+      }
+
+      const readings = await storage.getLatestEnvironmentReadingByUserId(appUser.id);
       return res.json(readings || {});
     } catch (error) {
       return handleError(res, error);
     }
   });
 
-  app.post('/api/environment', async (req, res) => {
+  app.post('/api/environment', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const { data, error } = validateBody(insertEnvironmentReadingSchema, req.body);
+      // For POST, we need to ensure the userId in the body (if still present from older clients or schema)
+      // is either ignored or validated against the authenticated user.
+      // Best practice: derive userId solely from auth session for POST operations.
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for POST /api/environment' });
+      }
+      const clerkId = req.auth.userId;
+
+      const clerkUser = await clerkClient.users.getUser(clerkId);
+      if (!clerkUser) {
+        return res.status(404).json({ error: 'Authenticated user not found in Clerk' });
+      }
+      const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '',
+        username: clerkUser.username,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+      });
+      if (!appUser || !appUser.id) {
+        return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
+      }
+
+      // Validate the rest of the body, ensuring userId from body is NOT used or matches appUser.id
+      const { data, error } = validateBody(insertEnvironmentReadingSchema, { ...req.body, userId: appUser.id });
       if (error) {
         return res.status(400).json({ error: 'Invalid environment data', details: error });
       }
 
-      const reading = await storage.createEnvironmentReading(data);
+      const reading = await storage.createEnvironmentReading(data); // data now includes the correct appUser.id
       
-      // Generate recommendations based on the new reading
-      await storage.generateRecommendations(data.userId);
+      // Generate recommendations based on the new reading, using the correct appUser.id
+      await storage.generateRecommendations(appUser.id);
       
       return res.status(201).json(reading);
     } catch (error) {
@@ -248,40 +310,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Care tasks routes
-  app.get('/api/care-tasks', async (req, res) => {
+  app.get('/api/care-tasks', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const userId = parseInt(req.query.userId as string);
-      if (isNaN(userId)) {
-        return res.status(400).json({ error: 'Valid userId is required' });
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for GET /api/care-tasks' });
+      }
+      const clerkId = req.auth.userId;
+
+      const clerkUser = await clerkClient.users.getUser(clerkId);
+      if (!clerkUser) {
+        return res.status(404).json({ error: 'Authenticated user not found in Clerk' });
       }
 
-      const tasks = await storage.getCareTasksByUserId(userId);
+      const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '',
+        username: clerkUser.username,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+      });
+
+      if (!appUser || !appUser.id) {
+        return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
+      }
+
+      const tasks = await storage.getCareTasksByUserId(appUser.id);
       return res.json(tasks);
     } catch (error) {
       return handleError(res, error);
     }
   });
 
-  app.post('/api/care-tasks', async (req, res) => {
+  app.post('/api/care-tasks', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const { data, error } = validateBody(insertCareTaskSchema, req.body);
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for POST /api/care-tasks' });
+      }
+      const clerkId = req.auth.userId;
+      const clerkUser = await clerkClient.users.getUser(clerkId);
+      if (!clerkUser) {
+        return res.status(404).json({ error: 'Authenticated user not found in Clerk' });
+      }
+      const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '',
+        username: clerkUser.username,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+      });
+      if (!appUser || !appUser.id) {
+        return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
+      }
+
+      // Ensure userId in body is from authenticated user
+      const { data, error } = validateBody(insertCareTaskSchema, { ...req.body, userId: appUser.id });
       if (error) {
         return res.status(400).json({ error: 'Invalid care task data', details: error });
       }
 
-      const task = await storage.createCareTask(data);
+      const task = await storage.createCareTask(data); // data now includes the correct appUser.id
       return res.status(201).json(task);
     } catch (error) {
       return handleError(res, error);
     }
   });
 
-  app.put('/api/care-tasks/:id/complete', async (req, res) => {
+  app.put('/api/care-tasks/:id/complete', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
+      // Ensure the authenticated user is authorized to complete this task (e.g., task belongs to them)
+      // This might require fetching the task first and checking its userId against appUser.id
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      // const clerkId = req.auth.userId; // Potentially use for authorization check
+
       const taskId = parseInt(req.params.id);
       if (isNaN(taskId)) {
         return res.status(400).json({ error: 'Valid task ID is required' });
       }
+
+      // TODO: Add authorization check: ensure task belongs to authenticated user
 
       const task = await storage.completeCareTask(taskId);
       if (!task) {
@@ -315,12 +421,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/care-tasks/:id/skip', async (req, res) => {
+  app.put('/api/care-tasks/:id/skip', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
+      // Ensure the authenticated user is authorized to skip this task
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      // const clerkId = req.auth.userId; // Potentially use for authorization check
+
       const taskId = parseInt(req.params.id);
       if (isNaN(taskId)) {
         return res.status(400).json({ error: 'Valid task ID is required' });
       }
+
+      // TODO: Add authorization check: ensure task belongs to authenticated user
 
       const task = await storage.skipCareTask(taskId);
       if (!task) {
@@ -334,14 +448,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Recommendations routes
-  app.get('/api/recommendations', async (req, res) => {
+  app.get('/api/recommendations', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const userId = parseInt(req.query.userId as string);
-      if (isNaN(userId)) {
-        return res.status(400).json({ error: 'Valid userId is required' });
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for GET /api/recommendations' });
+      }
+      const clerkId = req.auth.userId;
+
+      const clerkUser = await clerkClient.users.getUser(clerkId);
+      if (!clerkUser) {
+        return res.status(404).json({ error: 'Authenticated user not found in Clerk' });
       }
 
-      const recommendations = await storage.getRecommendationsByUserId(userId);
+      const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '',
+        username: clerkUser.username,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+      });
+
+      if (!appUser || !appUser.id) {
+        return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
+      }
+
+      const recommendations = await storage.getRecommendationsByUserId(appUser.id);
       return res.json(recommendations);
     } catch (error) {
       return handleError(res, error);
@@ -349,15 +479,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Generate AI recommendations on demand
-  app.post('/api/recommendations/generate', async (req, res) => {
+  app.post('/api/recommendations/generate', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const userId = parseInt(req.body.userId as string);
-      if (isNaN(userId)) {
-        return res.status(400).json({ error: 'Valid userId is required' });
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for POST /api/recommendations/generate' });
+      }
+      const clerkId = req.auth.userId;
+
+      const clerkUser = await clerkClient.users.getUser(clerkId);
+      if (!clerkUser) {
+        return res.status(404).json({ error: 'Authenticated user not found in Clerk' });
+      }
+      const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '',
+        username: clerkUser.username,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+      });
+      if (!appUser || !appUser.id) {
+        return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
       }
       
-      await storage.generateRecommendations(userId);
-      const recommendations = await storage.getRecommendationsByUserId(userId);
+      // The original code used req.body.userId. We'll use the authenticated appUser.id instead.
+      // const userIdFromBody = parseInt(req.body.userId as string);
+      // if (isNaN(userIdFromBody) || userIdFromBody !== appUser.id) {
+      //   return res.status(400).json({ error: 'Valid userId matching authenticated user is required in body, or omit it.' });
+      // }
+
+      // Assuming generateRecommendations now takes the internal appUser.id
+      await storage.generateRecommendations(appUser.id);
+      const recommendations = await storage.getRecommendationsByUserId(appUser.id);
       
       return res.json({ 
         success: true,
@@ -424,15 +575,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard stats
-  app.get('/api/dashboard-stats', async (req, res) => {
+  app.get('/api/dashboard-stats', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const userId = parseInt(req.query.userId as string);
-      if (isNaN(userId)) {
-        return res.status(400).json({ error: 'Valid userId is required' });
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for GET /api/dashboard-stats' });
+      }
+      const clerkId = req.auth.userId;
+
+      const clerkUser = await clerkClient.users.getUser(clerkId);
+      if (!clerkUser) {
+        return res.status(404).json({ error: 'Authenticated user not found in Clerk' });
       }
 
-      const stats = await storage.getDashboardStats(userId);
-      return res.json(stats);
+      const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '',
+        username: clerkUser.username,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+      });
+
+      if (!appUser || !appUser.id) {
+        return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
+      }
+
+      const stats = await storage.getDashboardStats(appUser.id);
+      // Ensure the user's name is included, preferring Clerk's first name if available
+      const userName = appUser.name || clerkUser.firstName || appUser.username || 'User';
+      
+      return res.json({ ...stats, name: userName });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+  // Care history routes
+  app.get('/api/plants/:plantId/care-history', async (req, res) => {
+    try {
+      const plantId = parseInt(req.params.plantId);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const careHistory = await storage.getCareHistoryByPlantId(plantId);
+      if (!careHistory) {
+        return res.status(404).json({ error: 'Care history not found' });
+      }
+
+      return res.json(careHistory);
     } catch (error) {
       return handleError(res, error);
     }

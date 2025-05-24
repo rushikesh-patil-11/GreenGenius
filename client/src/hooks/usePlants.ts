@@ -3,20 +3,21 @@ import { Plant, PlantHealthMetric } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 
-export function usePlants(userId: number) {
+export function usePlants(options?: { enabled?: boolean }) {
   const {
     data: plants = [],
     isLoading,
     error,
   } = useQuery<Plant[]>({
-    queryKey: ['/api/plants', { userId }],
+    queryKey: ['/api/plants'],
     queryFn: async () => {
-      const response = await fetch(`/api/plants?userId=${userId}`);
+      const response = await fetch(`/api/plants`);
       if (!response.ok) {
         throw new Error('Failed to fetch plants');
       }
       return response.json();
     },
+    enabled: options?.enabled,
   });
 
   const healthMetricsQueries = plants.map((plant) => {
@@ -29,7 +30,7 @@ export function usePlants(userId: number) {
         }
         return response.json();
       },
-      enabled: plants.length > 0,
+      enabled: plants.length > 0 && !!options?.enabled,
     });
   });
 

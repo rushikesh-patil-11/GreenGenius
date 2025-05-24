@@ -8,12 +8,11 @@ import type { EnvironmentReading as SharedEnvironmentReading } from "@shared/sch
 
 interface EnvironmentSectionProps {
   environmentData?: SharedEnvironmentReading;
-  userId: number;
   onUpdate: () => void;
   loading?: boolean;
 }
 
-export function EnvironmentSection({ environmentData, userId, onUpdate, loading = false }: EnvironmentSectionProps) {
+export function EnvironmentSection({ environmentData, onUpdate, loading = false }: EnvironmentSectionProps) {
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
   const handleUpdateEnvironment = () => {
@@ -167,7 +166,6 @@ export function EnvironmentSection({ environmentData, userId, onUpdate, loading 
       <EnvironmentUpdateModal
         isOpen={isUpdateModalOpen}
         onClose={() => setIsUpdateModalOpen(false)}
-        userId={userId}
         currentEnvironment={environmentData}
         onUpdate={onUpdate}
       />

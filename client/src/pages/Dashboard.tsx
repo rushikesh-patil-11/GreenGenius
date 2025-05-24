@@ -18,25 +18,25 @@ import { queryClient } from "@/lib/queryClient";
 import type { Plant } from "@shared/schema";
 
 export default function Dashboard() {
-  const userId = 1; // In a real app, this would come from authentication
+  const { userId: clerkUserId, isSignedIn, isLoaded } = useAuth();
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
   
-  // Fetch dashboard stats
-  const { stats, isLoading: isStatsLoading } = useDashboardStats(userId);
+  // Fetch dashboard stats - ensure clerkUserId is available for enabling, but not passed to hook
+  const { stats, isLoading: isStatsLoading } = useDashboardStats({ enabled: !!isSignedIn && !!clerkUserId });
   
-  // Fetch plants and health metrics
-  const { plants, healthMetrics, isLoading: isPlantsLoading } = usePlants(userId);
+  // Fetch plants and health metrics - ensure clerkUserId is available for enabling, but not passed to hook
+  const { plants, healthMetrics, isLoading: isPlantsLoading } = usePlants({ enabled: !!isSignedIn && !!clerkUserId });
   
-  // Fetch care tasks
-  const { tasks, isLoading: isTasksLoading } = useCareSchedule(userId);
+  // Fetch care tasks - ensure clerkUserId is available
+  const { tasks, isLoading: isTasksLoading } = useCareSchedule({ enabled: !!isSignedIn && !!clerkUserId });
   
-  // Fetch environment data and recommendations
+  // Fetch environment data and recommendations - ensure clerkUserId is available for enabling, but not passed to hook
   const { 
     environmentData, 
     recommendations, 
     isLoading: isEnvironmentLoading,
     updateEnvironment
-  } = useEnvironment(userId);
+  } = useEnvironment({ enabled: !!isSignedIn && !!clerkUserId });
 
   const handleAddPlant = (newPlant: Plant) => {
     // Invalidate queries to refetch data after adding a plant
@@ -96,7 +96,6 @@ export default function Dashboard() {
           {/* Environment Section */}
           <EnvironmentSection 
             environmentData={environmentData}
-            userId={userId}
             onUpdate={handleUpdateEnvironment}
             loading={isEnvironmentLoading}
           />

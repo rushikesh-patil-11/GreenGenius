@@ -15,12 +15,13 @@ import { queryClient } from "@/lib/queryClient";
 interface EnvironmentUpdateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userId: number;
   currentEnvironment?: SharedEnvironmentReading;
   onUpdate: () => void;
 }
 
-const formSchema = insertEnvironmentReadingSchema.extend({
+const baseFormSchema = insertEnvironmentReadingSchema.omit({ userId: true });
+
+const formSchema = baseFormSchema.extend({
   temperature: z.preprocess(
     (val) => (val === "" ? undefined : Number(val)),
     z.number().min(0, "Temperature must be a positive number").optional()
@@ -35,7 +36,6 @@ const formSchema = insertEnvironmentReadingSchema.extend({
 export function EnvironmentUpdateModal({ 
   isOpen, 
   onClose, 
-  userId, 
   currentEnvironment,
   onUpdate 
 }: EnvironmentUpdateModalProps) {
@@ -45,7 +45,6 @@ export function EnvironmentUpdateModal({
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      userId,
       temperature: currentEnvironment?.temperature ?? undefined,
       humidity: currentEnvironment?.humidity ?? undefined,
       lightLevel: currentEnvironment?.lightLevel as ("low" | "medium" | "high" | undefined),

@@ -3,20 +3,21 @@ import { EnvironmentReading, Recommendation } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 
-export function useEnvironment(userId: number) {
+export function useEnvironment(options?: { enabled?: boolean }) {
   const {
     data: environmentData,
     isLoading: isEnvironmentLoading,
     error: environmentError,
   } = useQuery<EnvironmentReading>({
-    queryKey: ['/api/environment', { userId }],
+    queryKey: ['/api/environment'],
     queryFn: async () => {
-      const response = await fetch(`/api/environment?userId=${userId}`);
+      const response = await fetch(`/api/environment`);
       if (!response.ok) {
         throw new Error('Failed to fetch environment data');
       }
       return response.json();
     },
+    enabled: options?.enabled,
   });
 
   const {
@@ -24,14 +25,15 @@ export function useEnvironment(userId: number) {
     isLoading: isRecommendationsLoading,
     error: recommendationsError,
   } = useQuery<Recommendation[]>({
-    queryKey: ['/api/recommendations', { userId }],
+    queryKey: ['/api/recommendations'],
     queryFn: async () => {
-      const response = await fetch(`/api/recommendations?userId=${userId}`);
+      const response = await fetch(`/api/recommendations`);
       if (!response.ok) {
         throw new Error('Failed to fetch recommendations');
       }
       return response.json();
     },
+    enabled: options?.enabled,
   });
 
   const updateEnvironment = useMutation({
@@ -66,20 +68,21 @@ export function useEnvironment(userId: number) {
   };
 }
 
-export function useDashboardStats(userId: number) {
+export function useDashboardStats(options?: { enabled?: boolean }) {
   const {
     data: stats,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['/api/dashboard-stats', { userId }],
+    queryKey: ['/api/dashboard-stats'],
     queryFn: async () => {
-      const response = await fetch(`/api/dashboard-stats?userId=${userId}`);
+      const response = await fetch(`/api/dashboard-stats`);
       if (!response.ok) {
         throw new Error('Failed to fetch dashboard stats');
       }
       return response.json();
     },
+    enabled: options?.enabled,
   });
 
   return {

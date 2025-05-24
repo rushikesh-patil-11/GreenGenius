@@ -3,20 +3,21 @@ import { CareTask } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 
-export function useCareSchedule(userId: number) {
+export function useCareSchedule(options?: { enabled?: boolean }) {
   const {
     data: tasks = [],
     isLoading,
     error,
   } = useQuery<CareTask[]>({
-    queryKey: ['/api/care-tasks', { userId }],
+    queryKey: ['/api/care-tasks'],
     queryFn: async () => {
-      const response = await fetch(`/api/care-tasks?userId=${userId}`);
+      const response = await fetch(`/api/care-tasks`);
       if (!response.ok) {
         throw new Error('Failed to fetch care tasks');
       }
       return response.json();
     },
+    enabled: options?.enabled,
   });
 
   const completeTask = useMutation({

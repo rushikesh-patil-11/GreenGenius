@@ -54,7 +54,14 @@ export function AddPlantModal({ isOpen, onClose, userId }: AddPlantModalProps) {
     setIsSubmitting(true);
     
     try {
-      await apiRequest("POST", "/api/plants", values);
+      // Convert the Date object to ISO string format for API compatibility
+      const formattedData = {
+        ...values,
+        // Format the date as ISO string if it exists
+        lastWatered: values.lastWatered ? values.lastWatered.toISOString() : null
+      };
+      
+      await apiRequest("POST", "/api/plants", formattedData);
       
       toast({
         title: "Success",
@@ -68,6 +75,7 @@ export function AddPlantModal({ isOpen, onClose, userId }: AddPlantModalProps) {
       form.reset();
       onClose();
     } catch (error) {
+      console.error("Error adding plant:", error);
       toast({
         title: "Error",
         description: "Failed to add plant. Please try again.",

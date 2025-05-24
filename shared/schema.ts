@@ -30,8 +30,24 @@ export const plants = pgTable("plants", {
   lastWatered: timestamp("last_watered"),
 });
 
-export const insertPlantSchema = createInsertSchema(plants).omit({
+// Create the base schema
+const basePlantSchema = createInsertSchema(plants).omit({
   id: true,
+});
+
+// Create a modified schema with date handling for API requests
+export const insertPlantSchema = basePlantSchema.extend({
+  // Handle lastWatered as either a Date object or a string that can be converted to a Date
+  lastWatered: z.union([
+    z.date(),
+    z.string().transform((val) => new Date(val))
+  ]).optional().nullable(),
+  
+  // Handle acquiredDate as either a Date object or a string that can be converted to a Date
+  acquiredDate: z.union([
+    z.date(),
+    z.string().transform((val) => new Date(val))
+  ]).optional().nullable()
 });
 
 // Environment readings schema

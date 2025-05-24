@@ -765,31 +765,85 @@ export class DbStorage implements IStorage {
     
     if (!latestReading || plants.length === 0) return;
 
+    try {
+      // Import the Gemini AI service dynamically
+      const { generatePlantRecommendations } = await import('./services/gemini');
+      
+      // Generate AI-powered recommendations for each plant
+      for (const plant of plants) {
+        // Prepare plant data for the AI
+        const plantData = {
+          name: plant.name,
+          species: plant.species,
+          waterFrequencyDays: plant.waterFrequencyDays,
+          lightRequirement: plant.lightRequirement,
+          lastWatered: plant.lastWatered
+        };
+        
+        // Prepare environment data
+        const environmentData = {
+          temperature: latestReading.temperature,
+          humidity: latestReading.humidity,
+          lightLevel: latestReading.lightLevel
+        };
+        
+        // Get AI-powered recommendations
+        try {
+          const recommendations = await generatePlantRecommendations(plantData, environmentData);
+          
+          // Create each recommendation in storage
+          for (const rec of recommendations) {
+            await this.createRecommendation({
+              userId,
+              plantId: plant.id,
+              recommendationType: rec.recommendationType,
+              message: rec.message
+            });
+          }
+        } catch (aiError) {
+          console.error(`Error generating AI recommendations for plant ${plant.id}:`, aiError);
+          
+          // Fallback to basic recommendations if AI fails
+          this.generateBasicRecommendations(userId, plant, latestReading);
+        }
+      }
+    } catch (error) {
+      console.error('Error in Gemini AI integration:', error);
+      
+      // Fallback to basic recommendations for all plants
+      for (const plant of plants) {
+        this.generateBasicRecommendations(userId, plant, latestReading);
+      }
+    }
+  }
+  
+  // Helper method for generating basic recommendations without AI
+  private async generateBasicRecommendations(
+    userId: number, 
+    plant: Plant, 
+    latestReading: EnvironmentReading
+  ): Promise<void> {
     // Generate watering recommendations based on humidity
     if (latestReading.humidity && latestReading.humidity < 50) {
-      for (const plant of plants) {
-        if (plant.waterFrequencyDays && plant.waterFrequencyDays < 10) {
-          await this.createRecommendation({
-            userId,
-            plantId: plant.id,
-            recommendationType: "water",
-            message: `Your ${plant.name} plant may need less frequent watering. Based on the current humidity levels, consider watering once every 9 days instead of weekly.`
-          });
-        }
+      if (plant.waterFrequencyDays && plant.waterFrequencyDays < 10) {
+        await this.createRecommendation({
+          userId,
+          plantId: plant.id,
+          recommendationType: "water",
+          message: `Your ${plant.name} plant may need less frequent watering. Based on the current humidity levels, consider watering once every 9 days instead of weekly.`
+        });
       }
     }
 
     // Generate light recommendations
     if (latestReading.lightLevel === "low") {
-      for (const plant of plants) {
-        if (plant.lightRequirement === "medium" || plant.lightRequirement === "high") {
-          await this.createRecommendation({
-            userId,
-            plantId: plant.id,
-            recommendationType: "light",
-            message: `Your ${plant.name} shows signs of insufficient light. Consider moving it closer to an east-facing window for more indirect sunlight.`
-          });
-        }
+      if (plant.lightRequirement === "medium" || plant.lightRequirement === "high") {
+        await this.createRecommendation({
+          userId,
+          plantId: plant.id,
+          recommendationType: "light",
+          message: `Your ${plant.name} shows signs of insufficient light. Consider moving it closer to an east-facing window for more indirect sunlight.`
+        });
       }
     }
   }

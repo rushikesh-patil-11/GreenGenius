@@ -303,6 +303,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+  
+  // Generate AI recommendations on demand
+  app.post('/api/recommendations/generate', async (req, res) => {
+    try {
+      const userId = parseInt(req.body.userId as string);
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: 'Valid userId is required' });
+      }
+      
+      await storage.generateRecommendations(userId);
+      const recommendations = await storage.getRecommendationsByUserId(userId);
+      
+      return res.json({ 
+        success: true,
+        message: 'AI-powered recommendations generated successfully',
+        count: recommendations.length,
+        recommendations
+      });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
 
   app.put('/api/recommendations/:id/apply', async (req, res) => {
     try {

@@ -28,8 +28,8 @@ export function Sidebar() {
       </div>
       <nav className="px-4 pt-6">
         <div className="space-y-4">
-          <Link href="/">
-            <a className={linkClass("/")}>
+          <Link href="/dashboard">
+            <a className={linkClass("/dashboard")}>
               <Home className="text-primary text-xl" />
               <span className="ml-3 font-medium font-poppins">Dashboard</span>
             </a>

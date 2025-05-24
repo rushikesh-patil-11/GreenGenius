@@ -117,23 +117,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/plants', async (req, res) => {
     try {
-      // Skip schema validation for now and create the plant directly
-      // This is a workaround for the date validation issues
-      const plantData = {
-        ...req.body,
-        // Convert date strings to Date objects if they exist
-        lastWatered: req.body.lastWatered ? new Date(req.body.lastWatered) : null,
-        acquiredDate: req.body.acquiredDate ? new Date(req.body.acquiredDate) : null
-      };
+      // Extract basic plant data from request
+      const { userId, name, species, imageUrl, description, waterFrequencyDays, lightRequirement, status, lastWatered } = req.body;
       
-      // Basic validation - ensure required fields exist
-      if (!plantData.userId || !plantData.name) {
+      // Basic validation for required fields
+      if (!userId || !name) {
         return res.status(400).json({ 
           error: 'Missing required fields', 
           details: 'userId and name are required fields' 
         });
       }
+      
+      // Construct the plant data with properly parsed fields
+      const plantData = {
+        userId: Number(userId),
+        name,
+        species: species || null,
+        imageUrl: imageUrl || null,
+        description: description || null,
+        waterFrequencyDays: waterFrequencyDays ? Number(waterFrequencyDays) : null,
+        lightRequirement: lightRequirement || null,
+        status: status || 'healthy',
+        // Parse date string to Date object
+        lastWatered: lastWatered ? new Date(lastWatered) : new Date()
+      };
 
+      // Create the plant directly without schema validation
       const plant = await storage.createPlant(plantData);
       return res.status(201).json(plant);
     } catch (error) {

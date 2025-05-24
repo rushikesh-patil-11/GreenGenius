@@ -28,4 +28,7 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
   },
+  css: {
+    postcss: './postcss.config.js' // Path relative to vite.config.ts (project root)
+  }
 });

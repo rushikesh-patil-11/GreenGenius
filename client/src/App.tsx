@@ -11,6 +11,13 @@ import CareSchedulePage from "@/pages/CareSchedulePage";
 import PlantDetails from "@/pages/PlantDetails";
 import AIRecommendationsPage from "@/pages/AIRecommendationsPage";
 import Landing from "@/pages/Landing";
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  SignUpButton,
+  UserButton,
+} from "@clerk/clerk-react";
 
 function Router() {
   return (
@@ -31,6 +38,15 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
+          <header style={{ padding: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+            <SignedOut>
+              <SignInButton />
+              <SignUpButton />
+            </SignedOut>
+            <SignedIn>
+              <UserButton afterSignOutUrl="/" />
+            </SignedIn>
+          </header>
           <Toaster />
           <Router />
         </TooltipProvider>

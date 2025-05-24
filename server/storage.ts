@@ -659,77 +659,88 @@ export class MemStorage implements IStorage {
 
 // Database storage implementation
 export class DbStorage implements IStorage {
-  // private db: PostgresJsDatabase<typeof schema>;
-  // constructor() {
-  //   this.db = globalDbInstance; // Initialize instance db with the global one
-  // }
-
   // Use a getter to ensure the db instance is accessed only after initialization
   private get db(): PostgresJsDatabase<typeof schema> {
     if (!globalDbInstance) {
-      console.error('[storage.ts] DbStorage.db accessed before database was initialized. This should not happen if initializeDatabase() was called correctly at startup.');
-      throw new Error('Database not initialized. Critical startup error.');
+      console.error("[DbStorage] CRITICAL: Database instance accessed before initialization!");
+      throw new Error("Database not initialized. Call initializeDatabase() first.");
     }
     return globalDbInstance;
   }
 
   // User operations
   async getUser(id: number): Promise<User | undefined> {
-    const result = await this.db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1);
-    return result[0] as User | undefined;
+    return this.db.query.users.findFirst({
+      where: eq(schema.users.id, id),
+    });
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await this.db.select().from(schema.users).where(eq(schema.users.username, username)).limit(1);
-    return result[0] as User | undefined;
+    return this.db.query.users.findFirst({
+      where: eq(schema.users.username, username),
+    });
   }
 
   async getUserByClerkId(clerkId: string): Promise<User | undefined> {
-    const result = await this.db.select().from(schema.users).where(eq(schema.users.clerkId, clerkId)).limit(1);
-    return result[0] as User | undefined;
+    return this.db.query.users.findFirst({
+      where: eq(schema.users.clerkId, clerkId),
+    });
   }
 
   async getOrCreateUserByClerkId(clerkId: string, clerkUserData: { email: string; username?: string | null; firstName?: string | null; lastName?: string | null }): Promise<User> {
-    let user = await this.getUserByClerkId(clerkId);
+    let user = await this.db.query.users.findFirst({
+      where: eq(schema.users.clerkId, clerkId),
+    });
+
     if (user) {
       return user;
     }
 
-    // Determine name: try full name, then first name, then username, then email prefix
-    let name = (clerkUserData.firstName && clerkUserData.lastName) ? `${clerkUserData.firstName} ${clerkUserData.lastName}` : clerkUserData.firstName || clerkUserData.lastName || clerkUserData.username || clerkUserData.email.split('@')[0];
-    if (!name) name = 'New User'; // Fallback if all else fails
+    // User not found, create a new one
+    const baseUserName = clerkUserData.username || clerkUserData.email.split('@')[0];
+    const newName = `${clerkUserData.firstName || ''} ${clerkUserData.lastName || ''}`.trim() || baseUserName;
+    let attempt = 0;
+    const maxAttempts = 5; // Max attempts to generate a unique username
 
-    // Determine username: use provided username or derive from email, ensuring uniqueness might be complex here without more info or utility
-    // For now, we'll prefer Clerk's username, or fallback to email prefix. Database constraint will catch non-unique.
-    let username = clerkUserData.username || clerkUserData.email.split('@')[0];
-    // A more robust unique username generation might be needed in a production system if conflicts are common.
-    // For example, appending a short random string or checking for existence and incrementing a suffix.
+    while (attempt < maxAttempts) {
+      const effectiveUserName = attempt === 0 ? baseUserName : `${baseUserName}_${Math.random().toString(36).substring(2, 7)}`;
+      
+      try {
+        const newUserRecord = await this.db.insert(schema.users).values({
+          clerkId: clerkId,
+          username: effectiveUserName,
+          email: clerkUserData.email,
+          name: newName,
+          // password will be null by default due to schema definition (text("password"))
+        }).returning();
+        
+        if (newUserRecord.length === 0) {
+          console.error(`[DbStorage] Failed to create or retrieve user after insert for Clerk ID: ${clerkId} (attempt ${attempt + 1})`);
+          // This case should ideally not happen if insert was successful and there's no error, but as a safeguard:
+          throw new Error(`Failed to create or retrieve user for Clerk ID: ${clerkId} after insert returned empty.`);
+        }
+        console.log(`[DbStorage] New user created for Clerk ID ${clerkId} with username "${effectiveUserName}":`, newUserRecord[0]);
+        return newUserRecord[0];
 
-    const newUserInsert: InsertUser = {
-      clerkId,
-      email: clerkUserData.email,
-      name,
-      username, // This must be unique in the DB
-      password: null, // Password is null as Clerk handles auth
-    };
-
-    try {
-      user = await this.createUser(newUserInsert);
-    } catch (error: any) {
-      // Handle potential unique constraint errors for username or email
-      if (error.message && (error.message.includes('unique constraint "users_username_unique"') || error.message.includes('unique constraint "users_email_unique"'))) {
-        // This could happen if a user tries to sign up with an email/username that exists but is tied to a different Clerk ID (should be rare)
-        // Or if our derived username isn't unique.
-        console.error(`Error creating user due to unique constraint: ${error.message}. ClerkID: ${clerkId}`);
-        // Attempt to fetch again, in case of a race condition where another request created it.
-        const existingUser = await this.db.select().from(schema.users).where(eq(schema.users.email, clerkUserData.email)).limit(1);
-        if (existingUser[0]) return existingUser[0] as User;
-        throw new Error(`Failed to create or retrieve user for Clerk ID ${clerkId} due to conflicting unique fields.`);
+      } catch (error: any) {
+        // Check for PostgreSQL unique violation error (code 23505)
+        if (error.code === '23505' && error.constraint_name && error.constraint_name.includes('username')) { 
+          console.warn(`[DbStorage] Username "${effectiveUserName}" already exists. Retrying with a new username (attempt ${attempt + 1}/${maxAttempts}). ClerkID: ${clerkId}`);
+          attempt++;
+          if (attempt >= maxAttempts) {
+            console.error(`[DbStorage] Failed to create user for Clerk ID ${clerkId} after ${maxAttempts} attempts due to persistent username collision.`);
+            throw new Error(`Failed to create user for Clerk ID ${clerkId} due to persistent username collision. Base username: ${baseUserName}`);
+          }
+          // Continue to the next iteration of the while loop to retry with a new username
+        } else {
+          // Different error, re-throw
+          console.error(`[DbStorage] Error creating user for Clerk ID ${clerkId} (username: "${effectiveUserName}", attempt ${attempt + 1}):`, error.message, error.code ? `(Code: ${error.code})` : '');
+          throw error;
+        }
       }
-      console.error(`Error creating user for Clerk ID ${clerkId}:`, error);
-      throw error;
     }
-    return user;
+    // Fallback, should ideally be caught by maxAttempts throw inside the loop.
+    throw new Error(`[DbStorage] Exhausted attempts to create user for Clerk ID ${clerkId} due to username collision. Base username: ${baseUserName}`);
   }
 
   async createUser(user: InsertUser): Promise<User> {

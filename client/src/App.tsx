@@ -10,11 +10,13 @@ import Plants from "@/pages/Plants";
 import CareSchedulePage from "@/pages/CareSchedulePage";
 import PlantDetails from "@/pages/PlantDetails";
 import AIRecommendationsPage from "@/pages/AIRecommendationsPage";
+import Landing from "@/pages/Landing";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={Landing} />
+      <Route path="/dashboard" component={Dashboard} />
       <Route path="/plants" component={Plants} />
       <Route path="/plants/:id" component={PlantDetails} />
       <Route path="/schedule" component={CareSchedulePage} />

@@ -6,7 +6,7 @@ export function MobileNavigation() {
   const [location] = useLocation();
 
   const navItems = [
-    { href: "/", icon: LayoutDashboard, label: "Dashboard" },
+    { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
     { href: "/plants", icon: Leaf, label: "Plants" },
     { href: "/schedule", icon: Calendar, label: "Schedule" },
     { href: "/recommendations", icon: Lightbulb, label: "Tips" }

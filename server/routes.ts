@@ -117,7 +117,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/plants', async (req, res) => {
     try {
-      const { data, error } = validateBody(insertPlantSchema, req.body);
+      // Pre-process the lastWatered field if it's an ISO string
+      const requestData = { ...req.body };
+      
+      if (requestData.lastWatered && typeof requestData.lastWatered === 'string') {
+        // Convert ISO string to Date object
+        requestData.lastWatered = new Date(requestData.lastWatered);
+      }
+      
+      const { data, error } = validateBody(insertPlantSchema, requestData);
       if (error) {
         return res.status(400).json({ error: 'Invalid plant data', details: error });
       }

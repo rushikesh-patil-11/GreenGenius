@@ -8,8 +8,15 @@ import {
 } from "@/components/ui/card";
 import { Leaf, Sparkles, Calendar, TrendingUp } from "lucide-react";
 import { Link } from "wouter";
+import { useClerk } from "@clerk/clerk-react";
 
 export default function Landing() {
+  const { openSignIn } = useClerk();
+
+  const handleGetStarted = () => {
+    openSignIn({ afterSignInUrl: '/dashboard' });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
       {/* Hero Section */}
@@ -24,15 +31,14 @@ export default function Landing() {
             management, personalized care schedules, and AI-driven
             recommendations.
           </p>
-          <Link href="/dashboard">
-            <Button
-              size="lg"
-              className="bg-primary hover:bg-primary/90 text-white text-lg px-8 py-6"
-            >
-              Get Started Free
-              <Sparkles className="ml-2 h-5 w-5" />
-            </Button>
-          </Link>
+          <Button
+            size="lg"
+            className="bg-primary hover:bg-primary/90 text-white text-lg px-8 py-6"
+            onClick={handleGetStarted}
+          >
+            Get Started Free
+            <Sparkles className="ml-2 h-5 w-5" />
+          </Button>
         </div>
       </section>
 
@@ -120,15 +126,14 @@ export default function Landing() {
                 their gardening with AI-powered insights and smart care
                 management.
               </p>
-              <Link href="/dashboard">
-                <Button
-                  size="lg"
-                  className="bg-primary hover:bg-primary/90 text-white"
-                >
-                  Start Your Plant Journey
-                  <Leaf className="ml-2 h-5 w-5" />
-                </Button>
-              </Link>
+              <Button
+                size="lg"
+                className="bg-primary hover:bg-primary/90 text-white"
+                onClick={handleGetStarted}
+              >
+                Start Your Plant Journey
+                <Leaf className="ml-2 h-5 w-5" />
+              </Button>
             </CardContent>
           </Card>
         </div>

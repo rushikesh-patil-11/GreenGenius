@@ -4,16 +4,10 @@ import { Thermometer, Droplet, Sun, RefreshCw } from "lucide-react";
 import { getEnvironmentStatus, getLightLevelInfo } from "@/lib/utils";
 import { useState } from "react";
 import EnvironmentUpdateModal from "@/components/modals/EnvironmentUpdateModal";
-
-interface EnvironmentReading {
-  temperature?: number;
-  humidity?: number;
-  lightLevel?: string;
-  readingTimestamp?: string;
-}
+import type { EnvironmentReading as SharedEnvironmentReading } from "@shared/schema";
 
 interface EnvironmentSectionProps {
-  environmentData: EnvironmentReading;
+  environmentData?: SharedEnvironmentReading;
   userId: number;
   onUpdate: () => void;
   loading?: boolean;
@@ -26,7 +20,9 @@ export function EnvironmentSection({ environmentData, userId, onUpdate, loading 
     setIsUpdateModalOpen(true);
   };
 
-  if (loading) {
+  // If loading, or if environmentData is not yet available (even if not strictly loading), show skeleton.
+  // This handles the case where the parent might pass undefined before data is ready.
+  if (loading || !environmentData) {
     return (
       <Card className="bg-white dark:bg-card shadow-natural mb-8">
         <CardContent className="p-6">
@@ -49,6 +45,7 @@ export function EnvironmentSection({ environmentData, userId, onUpdate, loading 
     );
   }
 
+  // At this point, environmentData is guaranteed to be defined due to the check above.
   const temperatureStatus = environmentData.temperature
     ? getEnvironmentStatus(environmentData.temperature, 'temperature')
     : { status: 'Unknown', color: 'text-muted-foreground' };

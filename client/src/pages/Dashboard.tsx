@@ -13,6 +13,9 @@ import { useDashboardStats } from "@/hooks/useEnvironment";
 import { usePlants } from "@/hooks/usePlants";
 import { useCareSchedule } from "@/hooks/useCareSchedule";
 import { useEnvironment } from "@/hooks/useEnvironment";
+import { useAuth } from "@clerk/clerk-react";
+import { queryClient } from "@/lib/queryClient";
+import type { Plant } from "@shared/schema";
 
 export default function Dashboard() {
   const userId = 1; // In a real app, this would come from authentication
@@ -35,8 +38,12 @@ export default function Dashboard() {
     updateEnvironment
   } = useEnvironment(userId);
 
-  const handleAddPlant = () => {
-    setIsAddPlantModalOpen(true);
+  const handleAddPlant = (newPlant: Plant) => {
+    // Invalidate queries to refetch data after adding a plant
+    queryClient.invalidateQueries({ queryKey: ['/api/plants'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/dashboard-stats'] });
+    // Optionally, you could update local state if you're managing plants that way
+    console.log('Plant added:', newPlant);
   };
 
   const handleUpdateEnvironment = () => {
@@ -75,7 +82,7 @@ export default function Dashboard() {
               </Button>
               <Button 
                 className="bg-primary hover:bg-primary-light text-white"
-                onClick={handleAddPlant}
+                onClick={() => setIsAddPlantModalOpen(true)}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 <span>Add Plant</span>
@@ -88,7 +95,7 @@ export default function Dashboard() {
           
           {/* Environment Section */}
           <EnvironmentSection 
-            environmentData={environmentData || {}} 
+            environmentData={environmentData}
             userId={userId}
             onUpdate={handleUpdateEnvironment}
             loading={isEnvironmentLoading}
@@ -123,7 +130,7 @@ export default function Dashboard() {
       <AddPlantModal 
         isOpen={isAddPlantModalOpen}
         onClose={() => setIsAddPlantModalOpen(false)}
-        userId={userId}
+        onAddPlant={handleAddPlant}
       />
     </div>
   );

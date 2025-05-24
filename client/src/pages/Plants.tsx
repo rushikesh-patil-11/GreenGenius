@@ -8,6 +8,9 @@ import AddPlantModal from "@/components/modals/AddPlantModal";
 import { usePlants } from "@/hooks/usePlants";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@clerk/clerk-react";
+import { queryClient } from "@/lib/queryClient";
+import type { Plant } from "@shared/schema";
 
 export default function Plants() {
   const userId = 1; // In a real app, this would come from authentication
@@ -17,7 +20,12 @@ export default function Plants() {
   
   const { plants, healthMetrics, isLoading } = usePlants(userId);
   
-  const handleAddPlant = () => {
+  const handleAddPlant = (newPlant: Plant) => {
+    queryClient.invalidateQueries({ queryKey: ['/api/plants'] });
+    console.log('Plant added in PlantsPage:', newPlant);
+  };
+  
+  const handleOpenAddPlantModal = () => {
     setIsAddPlantModalOpen(true);
   };
   
@@ -64,7 +72,7 @@ export default function Plants() {
             <div className="mt-4 md:mt-0">
               <Button 
                 className="bg-primary hover:bg-primary-light text-white"
-                onClick={handleAddPlant}
+                onClick={handleOpenAddPlantModal}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 <span>Add Plant</span>
@@ -151,7 +159,7 @@ export default function Plants() {
                   <p className="text-muted-foreground mb-6">Add your first plant to get started.</p>
                   <Button 
                     className="bg-primary hover:bg-primary-light text-white"
-                    onClick={handleAddPlant}
+                    onClick={handleOpenAddPlantModal}
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     <span>Add Your First Plant</span>
@@ -180,7 +188,7 @@ export default function Plants() {
       <AddPlantModal 
         isOpen={isAddPlantModalOpen}
         onClose={() => setIsAddPlantModalOpen(false)}
-        userId={userId}
+        onAddPlant={handleAddPlant}
       />
     </div>
   );

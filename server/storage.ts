@@ -85,6 +85,8 @@ export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByClerkId(clerkId: string): Promise<User | undefined>;
+  getOrCreateUserByClerkId(clerkId: string, clerkUserData: { email: string; username?: string | null; firstName?: string | null; lastName?: string | null }): Promise<User>;
   createUser(user: InsertUser): Promise<User>;
 
   // Plant operations
@@ -160,10 +162,10 @@ export class MemStorage implements IStorage {
     // Initialize with a demo user
     this.createUser({
       username: "demo",
-      password: "password", // Note: In a real app, hash passwords
+      password: null, // Explicitly null for Clerk-based auth
       email: "demo@example.com",
       name: "Alex",
-      clerkId: "user_demo_clerk_id" // Added clerkId for consistency
+      clerkId: "user_demo_clerk_id"
     });
 
     // Add some sample plants
@@ -250,16 +252,65 @@ export class MemStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username
-    );
+    for (const user of Array.from(this.users.values())) {
+      if (user.username === username) {
+        return user;
+      }
+    }
+    return undefined;
+  }
+
+  async getUserByClerkId(clerkId: string): Promise<User | undefined> {
+    for (const user of Array.from(this.users.values())) {
+      if (user.clerkId === clerkId) {
+        return user;
+      }
+    }
+    return undefined;
+  }
+
+  async getOrCreateUserByClerkId(clerkId: string, clerkUserData: { email: string; username?: string | null; firstName?: string | null; lastName?: string | null }): Promise<User> {
+    let user = await this.getUserByClerkId(clerkId);
+    if (user) {
+      return user;
+    }
+
+    let name = (clerkUserData.firstName && clerkUserData.lastName) 
+      ? `${clerkUserData.firstName} ${clerkUserData.lastName}` 
+      : clerkUserData.firstName || clerkUserData.lastName || clerkUserData.username || clerkUserData.email.split('@')[0];
+    if (!name) name = 'New User';
+
+    let username = clerkUserData.username || clerkUserData.email.split('@')[0];
+    // Ensure username is unique in MemStorage
+    let uniqueUsername = username;
+    let counter = 1;
+    while (Array.from(this.users.values()).some(u => u.username === uniqueUsername)) {
+      uniqueUsername = `${username}${counter++}`;
+    }
+
+    const newUser: User = {
+      id: this.userId++,
+      clerkId,
+      email: clerkUserData.email,
+      name,
+      username: uniqueUsername,
+      password: null, // Clerk handles auth
+    };
+    this.users.set(newUser.id, newUser);
+    return newUser;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.userId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const newUser: User = {
+      id: this.userId++,
+      clerkId: insertUser.clerkId, // clerkId is now mandatory in InsertUser via schema
+      username: insertUser.username,
+      password: insertUser.password ?? null, // Ensure password is null if undefined
+      email: insertUser.email,
+      name: insertUser.name,
+    };
+    this.users.set(newUser.id, newUser);
+    return newUser;
   }
 
   // Plant operations
@@ -633,6 +684,54 @@ export class DbStorage implements IStorage {
     return result[0] as User | undefined;
   }
 
+  async getUserByClerkId(clerkId: string): Promise<User | undefined> {
+    const result = await this.db.select().from(schema.users).where(eq(schema.users.clerkId, clerkId)).limit(1);
+    return result[0] as User | undefined;
+  }
+
+  async getOrCreateUserByClerkId(clerkId: string, clerkUserData: { email: string; username?: string | null; firstName?: string | null; lastName?: string | null }): Promise<User> {
+    let user = await this.getUserByClerkId(clerkId);
+    if (user) {
+      return user;
+    }
+
+    // Determine name: try full name, then first name, then username, then email prefix
+    let name = (clerkUserData.firstName && clerkUserData.lastName) ? `${clerkUserData.firstName} ${clerkUserData.lastName}` : clerkUserData.firstName || clerkUserData.lastName || clerkUserData.username || clerkUserData.email.split('@')[0];
+    if (!name) name = 'New User'; // Fallback if all else fails
+
+    // Determine username: use provided username or derive from email, ensuring uniqueness might be complex here without more info or utility
+    // For now, we'll prefer Clerk's username, or fallback to email prefix. Database constraint will catch non-unique.
+    let username = clerkUserData.username || clerkUserData.email.split('@')[0];
+    // A more robust unique username generation might be needed in a production system if conflicts are common.
+    // For example, appending a short random string or checking for existence and incrementing a suffix.
+
+    const newUserInsert: InsertUser = {
+      clerkId,
+      email: clerkUserData.email,
+      name,
+      username, // This must be unique in the DB
+      password: null, // Password is null as Clerk handles auth
+    };
+
+    try {
+      user = await this.createUser(newUserInsert);
+    } catch (error: any) {
+      // Handle potential unique constraint errors for username or email
+      if (error.message && (error.message.includes('unique constraint "users_username_unique"') || error.message.includes('unique constraint "users_email_unique"'))) {
+        // This could happen if a user tries to sign up with an email/username that exists but is tied to a different Clerk ID (should be rare)
+        // Or if our derived username isn't unique.
+        console.error(`Error creating user due to unique constraint: ${error.message}. ClerkID: ${clerkId}`);
+        // Attempt to fetch again, in case of a race condition where another request created it.
+        const existingUser = await this.db.select().from(schema.users).where(eq(schema.users.email, clerkUserData.email)).limit(1);
+        if (existingUser[0]) return existingUser[0] as User;
+        throw new Error(`Failed to create or retrieve user for Clerk ID ${clerkId} due to conflicting unique fields.`);
+      }
+      console.error(`Error creating user for Clerk ID ${clerkId}:`, error);
+      throw error;
+    }
+    return user;
+  }
+
   async createUser(user: InsertUser): Promise<User> {
     const [newUser] = await this.db.insert(schema.users).values(user).returning();
     return newUser as User;
@@ -765,7 +864,7 @@ export class DbStorage implements IStorage {
       // performedAt: new Date(), // Removed: defaultNow() in schema
     });
 
-    // If it's a watering task, update plant's lastWatered and create a new recurring task
+    // If it's a recurring task like watering, update plant's lastWatered and create a new recurring task
     if (updatedTask.taskType === 'water') {
       const plant = await this.getPlantById(updatedTask.plantId);
       if (plant && plant.waterFrequencyDays) {
@@ -882,7 +981,7 @@ export class DbStorage implements IStorage {
         const overdueTime = lastWateredTime + plant.waterFrequencyDays * 24 * 60 * 60 * 1000;
         
         // If current time is past the overdue time + a 2-day grace period (example)
-        if (now.getTime() > overdueTime + (2 * 24 * 60 * 60 * 1000)) {
+        if (now.getTime() > overdueTime) {
           // Check if a similar recommendation already exists and is not applied
           const existingRec = await this.db.query.recommendations.findFirst({
             where: and(

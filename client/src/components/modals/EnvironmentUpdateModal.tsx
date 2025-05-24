@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertEnvironmentReadingSchema } from "@shared/schema";
+import { insertEnvironmentReadingSchema, type EnvironmentReading as SharedEnvironmentReading } from "@shared/schema";
 import { z } from "zod";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -16,11 +16,7 @@ interface EnvironmentUpdateModalProps {
   isOpen: boolean;
   onClose: () => void;
   userId: number;
-  currentEnvironment: {
-    temperature?: number;
-    humidity?: number;
-    lightLevel?: string;
-  };
+  currentEnvironment?: SharedEnvironmentReading;
   onUpdate: () => void;
 }
 
@@ -50,9 +46,9 @@ export function EnvironmentUpdateModal({
     resolver: zodResolver(formSchema),
     defaultValues: {
       userId,
-      temperature: currentEnvironment.temperature,
-      humidity: currentEnvironment.humidity,
-      lightLevel: currentEnvironment.lightLevel as "low" | "medium" | "high" | undefined,
+      temperature: currentEnvironment?.temperature ?? undefined,
+      humidity: currentEnvironment?.humidity ?? undefined,
+      lightLevel: currentEnvironment?.lightLevel as ("low" | "medium" | "high" | undefined),
     },
   });
 

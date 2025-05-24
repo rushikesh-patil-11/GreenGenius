@@ -11,6 +11,7 @@ import {
   insertPlantHealthMetricsSchema
 } from "@shared/schema";
 import { ZodError } from "zod";
+import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to validate request body
@@ -115,22 +116,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/plants', async (req, res) => {
+  app.post('/api/plants', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      // Extract basic plant data from request
-      const { userId, name, species, imageUrl, description, waterFrequencyDays, lightRequirement, status, lastWatered } = req.body;
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+      const clerkId = req.auth.userId; // This is the Clerk User ID
+
+      // Extract basic plant data from request body (userId is no longer needed from body)
+      const { name, species, imageUrl, description, waterFrequencyDays, lightRequirement, status, lastWatered } = req.body;
       
       // Basic validation for required fields
-      if (!userId || !name) {
+      if (!name) {
         return res.status(400).json({ 
           error: 'Missing required fields', 
-          details: 'userId and name are required fields' 
+          details: 'name is a required field' 
         });
+      }
+
+      // Fetch user details from Clerk
+      const clerkUser = await clerkClient.users.getUser(clerkId);
+      if (!clerkUser) {
+        return res.status(404).json({ error: 'User not found in Clerk' });
+      }
+
+      // Get or create user in local database
+      const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '', // Primary email
+        username: clerkUser.username,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
+      });
+
+      if (!appUser || !appUser.id) {
+        return res.status(500).json({ error: 'Failed to get or create local user record' });
       }
       
       // Construct the plant data with properly parsed fields
       const plantData = {
-        userId: Number(userId),
+        userId: appUser.id, // Use the internal database ID
         name,
         species: species || null,
         imageUrl: imageUrl || null,
@@ -138,11 +162,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         waterFrequencyDays: waterFrequencyDays ? Number(waterFrequencyDays) : null,
         lightRequirement: lightRequirement || null,
         status: status || 'healthy',
-        // Parse date string to Date object
         lastWatered: lastWatered ? new Date(lastWatered) : new Date()
       };
 
-      // Create the plant directly without schema validation
       const plant = await storage.createPlant(plantData);
       return res.status(201).json(plant);
     } catch (error) {

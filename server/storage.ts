@@ -5,8 +5,13 @@ import {
   CareTask, InsertCareTask,
   Recommendation, InsertRecommendation,
   CareHistory, InsertCareHistory,
-  PlantHealthMetric, InsertPlantHealthMetric
+  PlantHealthMetric, InsertPlantHealthMetric,
+  users, plants, environmentReadings, careTasks, recommendations, careHistory, plantHealthMetrics
 } from "@shared/schema";
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { eq, desc, and, gte, lte, isNull } from 'drizzle-orm';
+import postgres from 'postgres';
+import { type InferInsertModel } from 'drizzle-orm';
 
 // Define interface for storage operations
 export interface IStorage {
@@ -505,4 +510,440 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Initialize database connection
+const connectionString = process.env.DATABASE_URL as string;
+const client = postgres(connectionString);
+const db = drizzle(client);
+
+// Database storage implementation
+export class DbStorage implements IStorage {
+  // User operations
+  async getUser(id: number): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result[0];
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.username, username));
+    return result[0];
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const result = await db.insert(users).values(user).returning();
+    return result[0];
+  }
+
+  // Plant operations
+  async getPlantById(id: number): Promise<Plant | undefined> {
+    const result = await db.select().from(plants).where(eq(plants.id, id));
+    return result[0];
+  }
+
+  async getPlantsByUserId(userId: number): Promise<Plant[]> {
+    return await db.select().from(plants).where(eq(plants.userId, userId));
+  }
+
+  async createPlant(plant: InsertPlant): Promise<Plant> {
+    const result = await db.insert(plants).values(plant).returning();
+    const newPlant = result[0];
+    
+    // Initialize health metrics for the new plant
+    await this.updatePlantHealthMetrics(newPlant.id);
+    
+    // Create initial watering task if frequency is set
+    if (plant.waterFrequencyDays) {
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + plant.waterFrequencyDays);
+      
+      await this.createCareTask({
+        plantId: newPlant.id,
+        taskType: "water",
+        dueDate
+      });
+    }
+    
+    return newPlant;
+  }
+
+  async updatePlant(id: number, plantData: InsertPlant): Promise<Plant | undefined> {
+    const result = await db
+      .update(plants)
+      .set(plantData)
+      .where(eq(plants.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  async deletePlant(id: number): Promise<boolean> {
+    const result = await db
+      .delete(plants)
+      .where(eq(plants.id, id))
+      .returning({ id: plants.id });
+    
+    return result.length > 0;
+  }
+
+  // Environment readings operations
+  async getLatestEnvironmentReadingByUserId(userId: number): Promise<EnvironmentReading | undefined> {
+    const result = await db
+      .select()
+      .from(environmentReadings)
+      .where(eq(environmentReadings.userId, userId))
+      .orderBy(desc(environmentReadings.readingTimestamp))
+      .limit(1);
+    
+    return result[0];
+  }
+
+  async createEnvironmentReading(reading: InsertEnvironmentReading): Promise<EnvironmentReading> {
+    const result = await db
+      .insert(environmentReadings)
+      .values({
+        ...reading,
+        readingTimestamp: new Date()
+      })
+      .returning();
+    
+    return result[0];
+  }
+
+  // Care tasks operations
+  async getCareTasksByUserId(userId: number): Promise<CareTask[]> {
+    // Find all plants for this user
+    const userPlants = await this.getPlantsByUserId(userId);
+    const plantIds = userPlants.map(plant => plant.id);
+    
+    if (plantIds.length === 0) {
+      return [];
+    }
+    
+    // Get all tasks for these plants where not completed and not skipped
+    return await db
+      .select()
+      .from(careTasks)
+      .where(
+        and(
+          careTasks.plantId.in(plantIds),
+          eq(careTasks.completed, false),
+          eq(careTasks.skipped, false)
+        )
+      )
+      .orderBy(careTasks.dueDate);
+  }
+
+  async createCareTask(task: InsertCareTask): Promise<CareTask> {
+    const result = await db
+      .insert(careTasks)
+      .values({
+        ...task,
+        completed: false,
+        skipped: false
+      })
+      .returning();
+    
+    return result[0];
+  }
+
+  async completeCareTask(id: number): Promise<CareTask | undefined> {
+    const result = await db
+      .update(careTasks)
+      .set({ 
+        completed: true, 
+        completedDate: new Date() 
+      })
+      .where(eq(careTasks.id, id))
+      .returning();
+    
+    const task = result[0];
+    if (!task) return undefined;
+    
+    // If it's a recurring task like watering, create the next task
+    if (task.taskType === 'water') {
+      const plant = await this.getPlantById(task.plantId);
+      if (plant && plant.waterFrequencyDays) {
+        // Update the plant's last watered date
+        await this.updatePlant(plant.id, {
+          ...plant,
+          lastWatered: new Date()
+        });
+        
+        // Add to care history
+        await this.createCareHistory({
+          plantId: plant.id,
+          actionType: 'watered',
+          notes: 'Completed watering task'
+        });
+        
+        // Create next watering task
+        const nextDueDate = new Date();
+        nextDueDate.setDate(nextDueDate.getDate() + plant.waterFrequencyDays);
+        
+        await this.createCareTask({
+          plantId: plant.id,
+          taskType: "water",
+          dueDate: nextDueDate
+        });
+        
+        // Update plant health metrics
+        await this.updatePlantHealthMetrics(plant.id);
+      }
+    }
+    
+    return task;
+  }
+
+  async skipCareTask(id: number): Promise<CareTask | undefined> {
+    const result = await db
+      .update(careTasks)
+      .set({ skipped: true })
+      .where(eq(careTasks.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  // Recommendations operations
+  async getRecommendationsByUserId(userId: number): Promise<Recommendation[]> {
+    return await db
+      .select()
+      .from(recommendations)
+      .where(
+        and(
+          eq(recommendations.userId, userId),
+          eq(recommendations.applied, false)
+        )
+      )
+      .orderBy(desc(recommendations.createdAt));
+  }
+
+  async createRecommendation(rec: InsertRecommendation): Promise<Recommendation> {
+    const result = await db
+      .insert(recommendations)
+      .values({
+        ...rec,
+        applied: false,
+        createdAt: new Date()
+      })
+      .returning();
+    
+    return result[0];
+  }
+
+  async applyRecommendation(id: number): Promise<Recommendation | undefined> {
+    const result = await db
+      .update(recommendations)
+      .set({ applied: true })
+      .where(eq(recommendations.id, id))
+      .returning();
+    
+    const recommendation = result[0];
+    if (!recommendation) return undefined;
+    
+    // If it's a watering recommendation, adjust the plant's watering frequency
+    if (recommendation.recommendationType === 'water' && recommendation.plantId) {
+      const plant = await this.getPlantById(recommendation.plantId);
+      if (plant && plant.waterFrequencyDays) {
+        // Extract the suggested days from the recommendation message
+        const daysMatch = recommendation.message.match(/(\d+)\s*days/);
+        if (daysMatch && daysMatch[1]) {
+          const suggestedDays = parseInt(daysMatch[1]);
+          await this.updatePlant(plant.id, {
+            ...plant,
+            waterFrequencyDays: suggestedDays
+          });
+        }
+      }
+    }
+    
+    return recommendation;
+  }
+
+  async generateRecommendations(userId: number): Promise<void> {
+    const plants = await this.getPlantsByUserId(userId);
+    const latestReading = await this.getLatestEnvironmentReadingByUserId(userId);
+    
+    if (!latestReading || plants.length === 0) return;
+
+    // Generate watering recommendations based on humidity
+    if (latestReading.humidity && latestReading.humidity < 50) {
+      for (const plant of plants) {
+        if (plant.waterFrequencyDays && plant.waterFrequencyDays < 10) {
+          await this.createRecommendation({
+            userId,
+            plantId: plant.id,
+            recommendationType: "water",
+            message: `Your ${plant.name} plant may need less frequent watering. Based on the current humidity levels, consider watering once every 9 days instead of weekly.`
+          });
+        }
+      }
+    }
+
+    // Generate light recommendations
+    if (latestReading.lightLevel === "low") {
+      for (const plant of plants) {
+        if (plant.lightRequirement === "medium" || plant.lightRequirement === "high") {
+          await this.createRecommendation({
+            userId,
+            plantId: plant.id,
+            recommendationType: "light",
+            message: `Your ${plant.name} shows signs of insufficient light. Consider moving it closer to an east-facing window for more indirect sunlight.`
+          });
+        }
+      }
+    }
+  }
+
+  // Care history operations
+  async getCareHistoryByPlantId(plantId: number): Promise<CareHistory[]> {
+    return await db
+      .select()
+      .from(careHistory)
+      .where(eq(careHistory.plantId, plantId))
+      .orderBy(desc(careHistory.performedAt));
+  }
+
+  async createCareHistory(history: InsertCareHistory): Promise<CareHistory> {
+    const result = await db
+      .insert(careHistory)
+      .values({
+        ...history,
+        performedAt: new Date()
+      })
+      .returning();
+    
+    return result[0];
+  }
+
+  // Plant health metrics
+  async getPlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined> {
+    const result = await db
+      .select()
+      .from(plantHealthMetrics)
+      .where(eq(plantHealthMetrics.plantId, plantId));
+    
+    return result[0];
+  }
+
+  async updatePlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined> {
+    const plant = await this.getPlantById(plantId);
+    if (!plant) return undefined;
+
+    // Calculate water level based on last watered date and watering frequency
+    let waterLevel = 100;
+    if (plant.lastWatered && plant.waterFrequencyDays) {
+      const daysSinceWatered = Math.floor((Date.now() - new Date(plant.lastWatered).getTime()) / (24 * 60 * 60 * 1000));
+      waterLevel = Math.max(0, 100 - (daysSinceWatered / plant.waterFrequencyDays * 100));
+    }
+
+    // Determine light level based on plant requirements
+    let lightLevel = 75;
+    if (plant.lightRequirement === "low") {
+      lightLevel = 90;
+    } else if (plant.lightRequirement === "high") {
+      lightLevel = 60;
+    }
+
+    // Calculate overall health as an average of water and light levels
+    const overallHealth = Math.round((waterLevel + lightLevel) / 2);
+
+    // Find existing metrics or create new ones
+    const existingMetrics = await this.getPlantHealthMetrics(plantId);
+    
+    if (existingMetrics) {
+      // Update existing metrics
+      const result = await db
+        .update(plantHealthMetrics)
+        .set({
+          waterLevel: Math.round(waterLevel),
+          lightLevel: Math.round(lightLevel),
+          overallHealth,
+          updatedAt: new Date()
+        })
+        .where(eq(plantHealthMetrics.id, existingMetrics.id))
+        .returning();
+      
+      return result[0];
+    } else {
+      // Create new metrics
+      const result = await db
+        .insert(plantHealthMetrics)
+        .values({
+          plantId,
+          waterLevel: Math.round(waterLevel),
+          lightLevel: Math.round(lightLevel),
+          overallHealth,
+          updatedAt: new Date()
+        })
+        .returning();
+      
+      return result[0];
+    }
+  }
+
+  // Dashboard stats
+  async getDashboardStats(userId: number): Promise<any> {
+    const plants = await this.getPlantsByUserId(userId);
+    const tasks = await this.getCareTasksByUserId(userId);
+    const latestReading = await this.getLatestEnvironmentReadingByUserId(userId);
+    const recommendations = await this.getRecommendationsByUserId(userId);
+
+    // Plants needing water in the next 24 hours
+    const plantsNeedingWater = tasks
+      .filter(task => 
+        task.taskType === 'water' && 
+        new Date(task.dueDate).getTime() <= Date.now() + 24 * 60 * 60 * 1000
+      )
+      .length;
+
+    // Calculate average plant health
+    let totalHealth = 0;
+    let healthyPlants = 0;
+
+    for (const plant of plants) {
+      const health = await this.getPlantHealthMetrics(plant.id);
+      if (health && health.overallHealth) {
+        totalHealth += health.overallHealth;
+        if (health.overallHealth >= 75) {
+          healthyPlants++;
+        }
+      }
+    }
+
+    const averageHealth = plants.length > 0 ? Math.round(totalHealth / plants.length) : 0;
+    
+    // Get health status text based on average health
+    let healthStatus = 'Good';
+    if (averageHealth >= 85) {
+      healthStatus = 'Excellent';
+    } else if (averageHealth >= 70) {
+      healthStatus = 'Good';
+    } else if (averageHealth >= 50) {
+      healthStatus = 'Fair';
+    } else {
+      healthStatus = 'Needs Attention';
+    }
+
+    // Calculate plants added in the current month
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const newPlantsThisMonth = plants.filter(plant => {
+      if (!plant.acquiredDate) return false;
+      const acquiredDate = new Date(plant.acquiredDate);
+      return acquiredDate.getMonth() === currentMonth && acquiredDate.getFullYear() === currentYear;
+    }).length;
+
+    return {
+      totalPlants: plants.length,
+      plantsNeedingWater,
+      healthStatus,
+      healthPercentage: averageHealth,
+      upcomingTasks: tasks.length,
+      newPlantsThisMonth,
+      name: 'Alex' // Default name for demo
+    };
+  }
+}
+
+// Initialize database storage
+export const storage = new DbStorage();

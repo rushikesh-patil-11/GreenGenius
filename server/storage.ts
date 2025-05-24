@@ -5,13 +5,13 @@ import {
   CareTask, InsertCareTask,
   Recommendation, InsertRecommendation,
   CareHistory, InsertCareHistory,
-  PlantHealthMetric, InsertPlantHealthMetric,
-  users, plants, environmentReadings, careTasks, recommendations, careHistory, plantHealthMetrics
-} from "@shared/schema";
-import { drizzle } from 'drizzle-orm/postgres-js';
-import { eq, desc, and, gte, lte, isNull } from 'drizzle-orm';
+  PlantHealthMetric, InsertPlantHealthMetric
+  // Table objects (users, plants, etc.) will be accessed via schema.users, schema.plants
+} from "../shared/schema";
+import { eq, desc, sql, and, gte, lte, isNull, inArray, lt } from "drizzle-orm"; // Restored missing operators, added lt
+import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js'; 
 import postgres from 'postgres';
-import { type InferInsertModel } from 'drizzle-orm';
+import * as schema from "../shared/schema"; // Import all schema for DB typing
 
 // Define interface for storage operations
 export interface IStorage {
@@ -207,7 +207,19 @@ export class MemStorage implements IStorage {
 
   async createPlant(insertPlant: InsertPlant): Promise<Plant> {
     const id = this.plantId++;
-    const plant: Plant = { ...insertPlant, id };
+    const plant: Plant = {
+      id,
+      userId: insertPlant.userId,
+      name: insertPlant.name,
+      species: insertPlant.species ?? null,
+      imageUrl: insertPlant.imageUrl ?? null,
+      description: insertPlant.description ?? null,
+      acquiredDate: insertPlant.acquiredDate ?? null,
+      status: insertPlant.status ?? null,
+      waterFrequencyDays: insertPlant.waterFrequencyDays ?? null,
+      lightRequirement: insertPlant.lightRequirement ?? null,
+      lastWatered: insertPlant.lastWatered ?? null,
+    };
     this.plants.set(id, plant);
 
     // Initialize health metrics for the new plant
@@ -246,7 +258,10 @@ export class MemStorage implements IStorage {
     const userReadings = Array.from(this.environmentReadings.values())
       .filter(reading => reading.userId === userId)
       .sort((a, b) => {
-        return new Date(b.readingTimestamp).getTime() - new Date(a.readingTimestamp).getTime();
+        // Handle potentially null or non-Date timestamps
+        const timeA = a.readingTimestamp instanceof Date ? a.readingTimestamp.getTime() : -Infinity; // Treat null/invalid as oldest
+        const timeB = b.readingTimestamp instanceof Date ? b.readingTimestamp.getTime() : -Infinity; // Treat null/invalid as oldest
+        return timeB - timeA; // Sorts descending (latest first)
       });
     
     return userReadings[0];
@@ -255,8 +270,11 @@ export class MemStorage implements IStorage {
   async createEnvironmentReading(insertReading: InsertEnvironmentReading): Promise<EnvironmentReading> {
     const id = this.readingId++;
     const reading: EnvironmentReading = { 
-      ...insertReading, 
-      id, 
+      id,
+      userId: insertReading.userId,
+      temperature: insertReading.temperature ?? null,
+      humidity: insertReading.humidity ?? null,
+      lightLevel: insertReading.lightLevel ?? null,
       readingTimestamp: new Date() 
     };
     this.environmentReadings.set(id, reading);
@@ -279,7 +297,7 @@ export class MemStorage implements IStorage {
       ...insertTask, 
       id, 
       completed: false, 
-      completedDate: undefined,
+      completedDate: null,
       skipped: false
     };
     this.careTasks.set(id, task);
@@ -331,14 +349,21 @@ export class MemStorage implements IStorage {
   async getRecommendationsByUserId(userId: number): Promise<Recommendation[]> {
     return Array.from(this.recommendations.values())
       .filter(rec => rec.userId === userId && !rec.applied)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : Number.MIN_SAFE_INTEGER;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : Number.MIN_SAFE_INTEGER;
+        return timeB - timeA; // Sorts newest first; nulls will be oldest
+      });
   }
 
   async createRecommendation(insertRecommendation: InsertRecommendation): Promise<Recommendation> {
     const id = this.recommendationId++;
     const recommendation: Recommendation = { 
-      ...insertRecommendation, 
-      id, 
+      id,
+      userId: insertRecommendation.userId,
+      plantId: insertRecommendation.plantId ?? null,
+      recommendationType: insertRecommendation.recommendationType,
+      message: insertRecommendation.message,
       applied: false, 
       createdAt: new Date() 
     };
@@ -397,18 +422,31 @@ export class MemStorage implements IStorage {
   async getCareHistoryByPlantId(plantId: number): Promise<CareHistory[]> {
     return Array.from(this.careHistory.values())
       .filter(history => history.plantId === plantId)
-      .sort((a, b) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime());
+      .sort((a, b) => {
+        if (a.performedAt === null && b.performedAt === null) {
+          return 0; // both null, treat as equal
+        }
+        if (a.performedAt === null) {
+          return 1; // a is null, b is not; a comes after b (nulls last)
+        }
+        if (b.performedAt === null) {
+          return -1; // b is null, a is not; b comes after a (nulls last)
+        }
+        // Both are non-null Date objects
+        return b.performedAt.getTime() - a.performedAt.getTime();
+      });
   }
 
-  async createCareHistory(insertHistory: InsertCareHistory): Promise<CareHistory> {
+  async createCareHistory(history: InsertCareHistory): Promise<CareHistory> {
     const id = this.historyId++;
-    const history: CareHistory = { 
-      ...insertHistory, 
+    const newHistory: CareHistory = { 
+      ...history, 
       id, 
-      performedAt: new Date() 
+      performedAt: new Date(),
+      notes: history.notes ?? null, // Ensure notes is string or null
     };
-    this.careHistory.set(id, history);
-    return history;
+    this.careHistory.set(id, newHistory);
+    return newHistory;
   }
 
   // Plant health metrics
@@ -477,7 +515,7 @@ export class MemStorage implements IStorage {
 
     for (const plant of plants) {
       const health = await this.getPlantHealthMetrics(plant.id);
-      if (health) {
+      if (health && typeof health.overallHealth === 'number') {
         totalHealth += health.overallHealth;
         if (health.overallHealth >= 75) {
           healthyPlants++;
@@ -485,7 +523,8 @@ export class MemStorage implements IStorage {
       }
     }
 
-    const averageHealth = plants.length > 0 ? Math.round(totalHealth / plants.length) : 0;
+    const averageHealth = plants.length > 0 ? 
+      Math.round(totalHealth / plants.length) : 0;
     let healthStatus = "Good";
     if (averageHealth < 50) healthStatus = "Poor";
     else if (averageHealth < 75) healthStatus = "Fair";
@@ -512,337 +551,343 @@ export class MemStorage implements IStorage {
 
 // Initialize database connection
 const connectionString = process.env.DATABASE_URL as string;
+console.log('Attempting to connect with DATABASE_URL:', connectionString); // Added for debugging
 const client = postgres(connectionString);
-const db = drizzle(client);
+const globalDbInstance: PostgresJsDatabase<typeof schema> = drizzle(client, { schema }); // Explicitly typed global instance
 
 // Database storage implementation
 export class DbStorage implements IStorage {
+  private db: PostgresJsDatabase<typeof schema>; // Correctly typed db member
+
+  constructor() {
+    this.db = globalDbInstance; // Initialize instance db with the global one
+  }
+
   // User operations
   async getUser(id: number): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.id, id));
-    return result[0];
+    const result = await this.db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1);
+    return result[0] as User | undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.username, username));
-    return result[0];
+    const result = await this.db.select().from(schema.users).where(eq(schema.users.username, username)).limit(1);
+    return result[0] as User | undefined;
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const result = await db.insert(users).values(user).returning();
-    return result[0];
+    const [newUser] = await this.db.insert(schema.users).values(user).returning();
+    return newUser as User;
   }
 
   // Plant operations
   async getPlantById(id: number): Promise<Plant | undefined> {
-    const result = await db.select().from(plants).where(eq(plants.id, id));
-    return result[0];
+    const result = await this.db.select().from(schema.plants).where(eq(schema.plants.id, id)).limit(1);
+    if (!result[0]) return undefined;
+    return {
+      ...result[0],
+      acquiredDate: result[0].acquiredDate ? new Date(result[0].acquiredDate) : null,
+      lastWatered: result[0].lastWatered ? new Date(result[0].lastWatered) : null,
+    } as Plant;
   }
 
   async getPlantsByUserId(userId: number): Promise<Plant[]> {
-    return await db.select().from(plants).where(eq(plants.userId, userId));
+    const result = await this.db.select().from(schema.plants).where(eq(schema.plants.userId, userId));
+    return result.map(p => ({
+      ...p,
+      acquiredDate: p.acquiredDate ? new Date(p.acquiredDate) : null,
+      lastWatered: p.lastWatered ? new Date(p.lastWatered) : null,
+    })) as Plant[];
   }
 
   async createPlant(plant: InsertPlant): Promise<Plant> {
-    const result = await db.insert(plants).values(plant).returning();
-    const newPlant = result[0];
-    
-    // Initialize health metrics for the new plant
-    await this.updatePlantHealthMetrics(newPlant.id);
-    
-    // Create initial watering task if frequency is set
-    if (plant.waterFrequencyDays) {
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + plant.waterFrequencyDays);
-      
-      await this.createCareTask({
-        plantId: newPlant.id,
-        taskType: "water",
-        dueDate
-      });
-    }
-    
-    return newPlant;
+    const [newPlant] = await this.db.insert(schema.plants).values(plant).returning();
+    return {
+      ...newPlant,
+      acquiredDate: newPlant.acquiredDate ? new Date(newPlant.acquiredDate) : null,
+      lastWatered: newPlant.lastWatered ? new Date(newPlant.lastWatered) : null,
+    } as Plant;
   }
 
   async updatePlant(id: number, plantData: InsertPlant): Promise<Plant | undefined> {
-    const result = await db
-      .update(plants)
-      .set(plantData)
-      .where(eq(plants.id, id))
-      .returning();
-    
-    return result[0];
+    const [updatedPlant] = await this.db.update(schema.plants).set(plantData).where(eq(schema.plants.id, id)).returning();
+    if (!updatedPlant) return undefined;
+    return {
+      ...updatedPlant,
+      acquiredDate: updatedPlant.acquiredDate ? new Date(updatedPlant.acquiredDate) : null,
+      lastWatered: updatedPlant.lastWatered ? new Date(updatedPlant.lastWatered) : null,
+    } as Plant;
   }
 
   async deletePlant(id: number): Promise<boolean> {
-    const result = await db
-      .delete(plants)
-      .where(eq(plants.id, id))
-      .returning({ id: plants.id });
-    
+    const result = await this.db.delete(schema.plants).where(eq(schema.plants.id, id)).returning({ id: schema.plants.id });
     return result.length > 0;
   }
 
   // Environment readings operations
   async getLatestEnvironmentReadingByUserId(userId: number): Promise<EnvironmentReading | undefined> {
-    const result = await db
-      .select()
-      .from(environmentReadings)
-      .where(eq(environmentReadings.userId, userId))
-      .orderBy(desc(environmentReadings.readingTimestamp))
+    const result = await this.db.select().from(schema.environmentReadings)
+      .where(eq(schema.environmentReadings.userId, userId))
+      .orderBy(desc(schema.environmentReadings.readingTimestamp))
       .limit(1);
-    
-    return result[0];
+    if (!result[0]) return undefined;
+    return {
+      ...result[0],
+      temperature: result[0].temperature ?? null,
+      humidity: result[0].humidity ?? null,
+      lightLevel: result[0].lightLevel ?? null,
+      readingTimestamp: result[0].readingTimestamp ? new Date(result[0].readingTimestamp) : null,
+    } as EnvironmentReading;
   }
 
   async createEnvironmentReading(reading: InsertEnvironmentReading): Promise<EnvironmentReading> {
-    const result = await db
-      .insert(environmentReadings)
-      .values({
-        ...reading,
-        readingTimestamp: new Date()
-      })
-      .returning();
-    
-    return result[0];
+    const [newReading] = await this.db.insert(schema.environmentReadings).values(reading).returning();
+    return {
+      ...newReading,
+      temperature: newReading.temperature ?? null,
+      humidity: newReading.humidity ?? null,
+      lightLevel: newReading.lightLevel ?? null,
+      readingTimestamp: newReading.readingTimestamp ? new Date(newReading.readingTimestamp) : null,
+    } as EnvironmentReading;
   }
 
   // Care tasks operations
   async getCareTasksByUserId(userId: number): Promise<CareTask[]> {
-    // Find all plants for this user
-    const userPlants = await this.getPlantsByUserId(userId);
-    const plantIds = userPlants.map(plant => plant.id);
+    const tasks = await this.db.select({
+      id: schema.careTasks.id,
+      plantId: schema.careTasks.plantId,
+      taskType: schema.careTasks.taskType,
+      dueDate: schema.careTasks.dueDate,
+      completed: schema.careTasks.completed,
+      completedDate: schema.careTasks.completedDate,
+      skipped: schema.careTasks.skipped
+    })
+    .from(schema.careTasks)
+    .innerJoin(schema.plants, eq(schema.careTasks.plantId, schema.plants.id))
+    .where(eq(schema.plants.userId, userId))
+    .orderBy(desc(schema.careTasks.dueDate));
     
-    if (plantIds.length === 0) {
-      return [];
-    }
-    
-    // Get all tasks for these plants where not completed and not skipped
-    return await db
-      .select()
-      .from(careTasks)
-      .where(
-        and(
-          careTasks.plantId.in(plantIds),
-          eq(careTasks.completed, false),
-          eq(careTasks.skipped, false)
-        )
-      )
-      .orderBy(careTasks.dueDate);
+    return tasks.map(task => ({
+      ...task,
+      dueDate: task.dueDate ? new Date(task.dueDate) : new Date(), // Ensure dueDate is a Date
+      completedDate: task.completedDate ? new Date(task.completedDate) : null,
+    })) as CareTask[];
   }
 
   async createCareTask(task: InsertCareTask): Promise<CareTask> {
-    const result = await db
-      .insert(careTasks)
+    const [newTask] = await this.db
+      .insert(schema.careTasks)
       .values({
         ...task,
-        completed: false,
-        skipped: false
+        // completedDate is null by default in schema
       })
       .returning();
     
-    return result[0];
+    return {
+      ...newTask,
+      dueDate: newTask.dueDate ? new Date(newTask.dueDate) : new Date(), // Ensure dueDate is a Date
+      completedDate: newTask.completedDate ? new Date(newTask.completedDate) : null,
+    } as CareTask;
   }
 
   async completeCareTask(id: number): Promise<CareTask | undefined> {
-    const result = await db
-      .update(careTasks)
-      .set({ 
-        completed: true, 
-        completedDate: new Date() 
-      })
-      .where(eq(careTasks.id, id))
+    const [updatedTask] = await this.db
+      .update(schema.careTasks)
+      .set({ completed: true, completedDate: new Date() })
+      .where(eq(schema.careTasks.id, id))
       .returning();
-    
-    const task = result[0];
-    if (!task) return undefined;
-    
-    // If it's a recurring task like watering, create the next task
-    if (task.taskType === 'water') {
-      const plant = await this.getPlantById(task.plantId);
+
+    if (!updatedTask) return undefined;
+
+    // Create a care history record
+    await this.createCareHistory({
+      plantId: updatedTask.plantId,
+      actionType: `completed_${updatedTask.taskType}`,
+    });
+
+    // If it's a watering task, update plant's lastWatered and create a new recurring task
+    if (updatedTask.taskType === 'water') {
+      const plant = await this.getPlantById(updatedTask.plantId);
       if (plant && plant.waterFrequencyDays) {
-        // Update the plant's last watered date
-        await this.updatePlant(plant.id, {
-          ...plant,
-          lastWatered: new Date()
-        });
-        
-        // Add to care history
-        await this.createCareHistory({
-          plantId: plant.id,
-          actionType: 'watered',
-          notes: 'Completed watering task'
-        });
-        
-        // Create next watering task
-        const nextDueDate = new Date();
+        const nextDueDate = new Date(updatedTask.completedDate || Date.now()); // base on completion time
         nextDueDate.setDate(nextDueDate.getDate() + plant.waterFrequencyDays);
-        
         await this.createCareTask({
           plantId: plant.id,
           taskType: "water",
           dueDate: nextDueDate
         });
-        
-        // Update plant health metrics
-        await this.updatePlantHealthMetrics(plant.id);
+        // Update lastWatered for the plant
+        await this.updatePlant(plant.id, { ...plant, lastWatered: new Date(updatedTask.completedDate || Date.now()) });
       }
     }
-    
-    return task;
+    return {
+      ...updatedTask,
+      dueDate: updatedTask.dueDate ? new Date(updatedTask.dueDate) : new Date(),
+      completedDate: updatedTask.completedDate ? new Date(updatedTask.completedDate) : null,
+    } as CareTask;
   }
 
   async skipCareTask(id: number): Promise<CareTask | undefined> {
-    const result = await db
-      .update(careTasks)
+    const [updatedTask] = await this.db
+      .update(schema.careTasks)
       .set({ skipped: true })
-      .where(eq(careTasks.id, id))
+      .where(eq(schema.careTasks.id, id))
       .returning();
     
-    return result[0];
+    if (!updatedTask) return undefined;
+
+    // Create a care history record
+    await this.createCareHistory({
+      plantId: updatedTask.plantId,
+      actionType: `skipped_${updatedTask.taskType}`,
+    });
+
+    return {
+      ...updatedTask,
+      dueDate: updatedTask.dueDate ? new Date(updatedTask.dueDate) : new Date(),
+      completedDate: updatedTask.completedDate ? new Date(updatedTask.completedDate) : null,
+    } as CareTask;
   }
 
   // Recommendations operations
   async getRecommendationsByUserId(userId: number): Promise<Recommendation[]> {
-    return await db
-      .select()
-      .from(recommendations)
-      .where(
-        and(
-          eq(recommendations.userId, userId),
-          eq(recommendations.applied, false)
-        )
-      )
-      .orderBy(desc(recommendations.createdAt));
+    const result = await this.db.select().from(schema.recommendations)
+      .where(and(eq(schema.recommendations.userId, userId), eq(schema.recommendations.applied, false)))
+      .orderBy(desc(schema.recommendations.createdAt));
+
+    return result.map(rec => ({
+        ...rec,
+        plantId: rec.plantId ?? null,
+        applied: rec.applied ?? false, // Ensure applied is boolean
+        createdAt: rec.createdAt ? new Date(rec.createdAt) : new Date(), // Ensure createdAt is a Date
+    })) as Recommendation[];
   }
 
-  async createRecommendation(rec: InsertRecommendation): Promise<Recommendation> {
-    const result = await db
-      .insert(recommendations)
+  async createRecommendation(recommendation: InsertRecommendation): Promise<Recommendation> {
+    const [newRecommendation] = await this.db
+      .insert(schema.recommendations)
       .values({
-        ...rec,
-        applied: false,
-        createdAt: new Date()
+        ...recommendation,
+        applied: false, // Default value
+        // createdAt is defaultNow in schema, so no need to set it here unless overriding
       })
       .returning();
     
-    return result[0];
+    return {
+      ...newRecommendation,
+      plantId: newRecommendation.plantId ?? null,
+      applied: newRecommendation.applied ?? false, // applied will be false from insert
+      createdAt: newRecommendation.createdAt ? new Date(newRecommendation.createdAt) : new Date(),
+    } as Recommendation;
   }
 
   async applyRecommendation(id: number): Promise<Recommendation | undefined> {
-    const result = await db
-      .update(recommendations)
+    const [recommendation] = await this.db
+      .update(schema.recommendations)
       .set({ applied: true })
-      .where(eq(recommendations.id, id))
+      .where(eq(schema.recommendations.id, id))
       .returning();
     
-    const recommendation = result[0];
     if (!recommendation) return undefined;
     
-    // If it's a watering recommendation, adjust the plant's watering frequency
+    // Example: If it's a watering recommendation, update plant's lastWatered and create history
     if (recommendation.recommendationType === 'water' && recommendation.plantId) {
       const plant = await this.getPlantById(recommendation.plantId);
-      if (plant && plant.waterFrequencyDays) {
-        // Extract the suggested days from the recommendation message
-        const daysMatch = recommendation.message.match(/(\d+)\s*days/);
-        if (daysMatch && daysMatch[1]) {
-          const suggestedDays = parseInt(daysMatch[1]);
-          await this.updatePlant(plant.id, {
-            ...plant,
-            waterFrequencyDays: suggestedDays
-          });
-        }
+      if (plant) {
+        await this.updatePlant(plant.id, { ...plant, lastWatered: new Date() });
+        await this.createCareHistory({
+          plantId: plant.id,
+          actionType: 'water_recommended',
+        });
       }
     }
-    
-    return recommendation;
+    return {
+      ...recommendation,
+      plantId: recommendation.plantId ?? null,
+      applied: recommendation.applied ?? false,
+      createdAt: recommendation.createdAt ? new Date(recommendation.createdAt) : new Date(),
+    } as Recommendation;
   }
 
   async generateRecommendations(userId: number): Promise<void> {
-    const plants = await this.getPlantsByUserId(userId);
+    const userPlants = await this.getPlantsByUserId(userId);
     const latestReading = await this.getLatestEnvironmentReadingByUserId(userId);
-    
-    if (!latestReading || plants.length === 0) return;
 
-    try {
-      // Import the Gemini AI service dynamically
-      const { generatePlantRecommendations } = await import('./services/gemini');
-      
-      // Generate AI-powered recommendations for each plant
-      for (const plant of plants) {
-        // Prepare plant data for the AI
-        const plantData = {
-          name: plant.name,
-          species: plant.species,
-          waterFrequencyDays: plant.waterFrequencyDays,
-          lightRequirement: plant.lightRequirement,
-          lastWatered: plant.lastWatered
-        };
-        
-        // Prepare environment data
-        const environmentData = {
-          temperature: latestReading.temperature,
-          humidity: latestReading.humidity,
-          lightLevel: latestReading.lightLevel
-        };
-        
-        // Get AI-powered recommendations
-        try {
-          const recommendations = await generatePlantRecommendations(plantData, environmentData);
-          
-          // Create each recommendation in storage
-          for (const rec of recommendations) {
-            await this.createRecommendation({
-              userId,
-              plantId: plant.id,
-              recommendationType: rec.recommendationType,
-              message: rec.message
-            });
-          }
-        } catch (aiError) {
-          console.error(`Error generating AI recommendations for plant ${plant.id}:`, aiError);
-          
-          // Fallback to basic recommendations if AI fails
-          this.generateBasicRecommendations(userId, plant, latestReading);
+    for (const plant of userPlants) {
+      if (!plant.id) continue;
+
+      // Basic Watering Recommendation
+      if (plant.lastWatered && plant.waterFrequencyDays) {
+        const daysSinceLastWatered = (Date.now() - new Date(plant.lastWatered).getTime()) / (1000 * 3600 * 24);
+        if (daysSinceLastWatered > plant.waterFrequencyDays) {
+          await this.createRecommendation({
+            userId,
+            plantId: plant.id,
+            recommendationType: 'water',
+            message: `Time to water ${plant.name}. It was last watered ${Math.floor(daysSinceLastWatered)} days ago.`
+          });
         }
       }
-    } catch (error) {
-      console.error('Error in Gemini AI integration:', error);
-      
-      // Fallback to basic recommendations for all plants
-      for (const plant of plants) {
-        this.generateBasicRecommendations(userId, plant, latestReading);
+
+      // Basic Light Recommendation (Example - can be more sophisticated)
+      if (latestReading && latestReading.lightLevel && plant.lightRequirement) {
+        if (latestReading.lightLevel === 'low' && (plant.lightRequirement === 'medium' || plant.lightRequirement === 'high')) {
+          await this.createRecommendation({
+            userId,
+            plantId: plant.id,
+            recommendationType: 'light',
+            message: `${plant.name} might need more light. Current room light level is low, but it prefers ${plant.lightRequirement} light.`
+          });
+        }
+        if (latestReading.lightLevel === 'high' && (plant.lightRequirement === 'medium' || plant.lightRequirement === 'low')) {
+          await this.createRecommendation({
+            userId,
+            plantId: plant.id,
+            recommendationType: 'light',
+            message: `${plant.name} might be getting too much light. Current room light level is high, but it prefers ${plant.lightRequirement} light.`
+          });
+        }
       }
+      // Add more recommendation logic (temperature, humidity, etc.) here
     }
   }
-  
+
   // Helper method for generating basic recommendations without AI
-  private async generateBasicRecommendations(
+  async generateBasicRecommendations(
     userId: number, 
     plant: Plant, 
-    latestReading: EnvironmentReading
+    latestReading: EnvironmentReading | undefined // Make latestReading optional
   ): Promise<void> {
-    // Generate watering recommendations based on humidity
-    if (latestReading.humidity && latestReading.humidity < 50) {
-      if (plant.waterFrequencyDays && plant.waterFrequencyDays < 10) {
+    if (!plant.id) return;
+
+    // Basic Watering Recommendation
+    if (plant.lastWatered && plant.waterFrequencyDays) {
+      const daysSinceLastWatered = (Date.now() - new Date(plant.lastWatered).getTime()) / (1000 * 3600 * 24);
+      if (daysSinceLastWatered > plant.waterFrequencyDays) {
         await this.createRecommendation({
           userId,
           plantId: plant.id,
-          recommendationType: "water",
-          message: `Your ${plant.name} plant may need less frequent watering. Based on the current humidity levels, consider watering once every 9 days instead of weekly.`
+          recommendationType: 'water',
+          message: `Time to water ${plant.name}. It was last watered ${Math.floor(daysSinceLastWatered)} days ago.`
         });
       }
     }
 
-    // Generate light recommendations
-    if (latestReading.lightLevel === "low") {
-      if (plant.lightRequirement === "medium" || plant.lightRequirement === "high") {
+    // Basic Light Recommendation
+    if (latestReading && latestReading.lightLevel && plant.lightRequirement) {
+      if (latestReading.lightLevel === 'low' && (plant.lightRequirement === 'medium' || plant.lightRequirement === 'high')) {
         await this.createRecommendation({
           userId,
           plantId: plant.id,
-          recommendationType: "light",
-          message: `Your ${plant.name} shows signs of insufficient light. Consider moving it closer to an east-facing window for more indirect sunlight.`
+          recommendationType: 'light',
+          message: `${plant.name} might need more light. Current room light level is low, but it prefers ${plant.lightRequirement} light.`
+        });
+      }
+      if (latestReading.lightLevel === 'high' && (plant.lightRequirement === 'medium' || plant.lightRequirement === 'low')) {
+        await this.createRecommendation({
+          userId,
+          plantId: plant.id,
+          recommendationType: 'light',
+          message: `${plant.name} might be getting too much light. Current room light level is high, but it prefers ${plant.lightRequirement} light.`
         });
       }
     }
@@ -850,151 +895,149 @@ export class DbStorage implements IStorage {
 
   // Care history operations
   async getCareHistoryByPlantId(plantId: number): Promise<CareHistory[]> {
-    return await db
-      .select()
-      .from(careHistory)
-      .where(eq(careHistory.plantId, plantId))
-      .orderBy(desc(careHistory.performedAt));
+    const history = await this.db.select().from(schema.careHistory)
+      .where(eq(schema.careHistory.plantId, plantId))
+      .orderBy(desc(schema.careHistory.performedAt));
+    return history.map(h => ({
+      ...h,
+      performedAt: h.performedAt ? new Date(h.performedAt) : new Date(),
+    })) as CareHistory[];
   }
 
   async createCareHistory(history: InsertCareHistory): Promise<CareHistory> {
-    const result = await db
-      .insert(careHistory)
-      .values({
-        ...history,
-        performedAt: new Date()
+    const [newHistory] = await this.db.insert(schema.careHistory).values(history).returning();
+    return {
+      ...newHistory,
+      performedAt: newHistory.performedAt ? new Date(newHistory.performedAt) : new Date(),
+    } as CareHistory;
+  }
+
+  // Helper to get all care history for a user's plants (e.g., for a full activity feed)
+  async getAllUserCareHistory(userId: number): Promise<CareHistory[]> {
+    const historyResult = await this.db.select({
+        id: schema.careHistory.id,
+        plantId: schema.careHistory.plantId,
+        actionType: schema.careHistory.actionType,
+        performedAt: schema.careHistory.performedAt,
+        notes: schema.careHistory.notes, // Added notes to the select
+        // plantName is selected because the join needs it for the where clause, 
+        // but it won't be part of the final CareHistory object.
+        plantName: schema.plants.name 
       })
-      .returning();
-    
-    return result[0];
+      .from(schema.careHistory)
+      .innerJoin(schema.plants, eq(schema.careHistory.plantId, schema.plants.id))
+      .where(eq(schema.plants.userId, userId))
+      .orderBy(desc(schema.careHistory.performedAt));
+
+    return historyResult.map(h => ({
+      id: h.id,
+      plantId: h.plantId,
+      actionType: h.actionType,
+      notes: h.notes, // Map notes to the result object
+      performedAt: h.performedAt ? new Date(h.performedAt) : null, // Preserve null if original was null
+      // plantName is omitted to strictly match the CareHistory type
+    })) as CareHistory[]; // Cast to CareHistory[]
   }
 
   // Plant health metrics
   async getPlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined> {
-    const result = await db
-      .select()
-      .from(plantHealthMetrics)
-      .where(eq(plantHealthMetrics.plantId, plantId));
-    
-    return result[0];
+    const result = await this.db.select().from(schema.plantHealthMetrics)
+      .where(eq(schema.plantHealthMetrics.plantId, plantId))
+      .orderBy(desc(schema.plantHealthMetrics.updatedAt))
+      .limit(1);
+    if (!result[0]) return undefined;
+    return {
+      ...result[0],
+      updatedAt: result[0].updatedAt ? new Date(result[0].updatedAt) : new Date(),
+    } as PlantHealthMetric;
   }
 
-  async updatePlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined> {
-    const plant = await this.getPlantById(plantId);
-    if (!plant) return undefined;
+  async updatePlantHealthMetrics(plantId: number, metrics?: Partial<InsertPlantHealthMetric>): Promise<PlantHealthMetric | undefined> {
+    const currentMetrics = await this.getPlantHealthMetrics(plantId);
+    let newMetricsData: InsertPlantHealthMetric;
 
-    // Calculate water level based on last watered date and watering frequency
-    let waterLevel = 100;
-    if (plant.lastWatered && plant.waterFrequencyDays) {
-      const daysSinceWatered = Math.floor((Date.now() - new Date(plant.lastWatered).getTime()) / (24 * 60 * 60 * 1000));
-      waterLevel = Math.max(0, 100 - (daysSinceWatered / plant.waterFrequencyDays * 100));
-    }
-
-    // Determine light level based on plant requirements
-    let lightLevel = 75;
-    if (plant.lightRequirement === "low") {
-      lightLevel = 90;
-    } else if (plant.lightRequirement === "high") {
-      lightLevel = 60;
-    }
-
-    // Calculate overall health as an average of water and light levels
-    const overallHealth = Math.round((waterLevel + lightLevel) / 2);
-
-    // Find existing metrics or create new ones
-    const existingMetrics = await this.getPlantHealthMetrics(plantId);
-    
-    if (existingMetrics) {
-      // Update existing metrics
-      const result = await db
-        .update(plantHealthMetrics)
-        .set({
-          waterLevel: Math.round(waterLevel),
-          lightLevel: Math.round(lightLevel),
-          overallHealth,
-          updatedAt: new Date()
-        })
-        .where(eq(plantHealthMetrics.id, existingMetrics.id))
+    if (currentMetrics) {
+      newMetricsData = { 
+        plantId,
+        waterLevel: metrics?.waterLevel ?? currentMetrics.waterLevel,
+        lightLevel: metrics?.lightLevel ?? currentMetrics.lightLevel,
+        overallHealth: metrics?.overallHealth ?? currentMetrics.overallHealth,
+        // updatedAt will be handled by defaultNow or explicit set
+      };
+      const [updated] = await this.db.update(schema.plantHealthMetrics)
+        .set({ ...newMetricsData, updatedAt: new Date() })
+        .where(eq(schema.plantHealthMetrics.plantId, plantId))
         .returning();
-      
-      return result[0];
+      return updated ? { ...updated, updatedAt: new Date(updated.updatedAt!) } as PlantHealthMetric : undefined;
     } else {
-      // Create new metrics
-      const result = await db
-        .insert(plantHealthMetrics)
-        .values({
-          plantId,
-          waterLevel: Math.round(waterLevel),
-          lightLevel: Math.round(lightLevel),
-          overallHealth,
-          updatedAt: new Date()
-        })
-        .returning();
-      
-      return result[0];
+      // Create new if not exists
+      newMetricsData = { 
+        plantId,
+        waterLevel: metrics?.waterLevel ?? 100, // Default if creating new
+        lightLevel: metrics?.lightLevel ?? 100,
+        overallHealth: metrics?.overallHealth ?? 100,
+      };
+      const [created] = await this.db.insert(schema.plantHealthMetrics).values(newMetricsData).returning();
+      return created ? { ...created, updatedAt: new Date(created.updatedAt!) } as PlantHealthMetric : undefined;
     }
   }
 
   // Dashboard stats
   async getDashboardStats(userId: number): Promise<any> {
-    const plants = await this.getPlantsByUserId(userId);
-    const tasks = await this.getCareTasksByUserId(userId);
-    const latestReading = await this.getLatestEnvironmentReadingByUserId(userId);
-    const recommendations = await this.getRecommendationsByUserId(userId);
+    const userPlants = await this.db.select().from(schema.plants).where(eq(schema.plants.userId, userId));
+    const upcomingTasks = await this.db.select().from(schema.careTasks)
+      .innerJoin(schema.plants, eq(schema.careTasks.plantId, schema.plants.id))
+      .where(and(
+        eq(schema.plants.userId, userId),
+        eq(schema.careTasks.completed, false),
+        eq(schema.careTasks.skipped, false),
+        gte(schema.careTasks.dueDate, new Date()) // Tasks due today or in the future
+      ))
+      .orderBy(schema.careTasks.dueDate)
+      .limit(5);
 
-    // Plants needing water in the next 24 hours
-    const plantsNeedingWater = tasks
-      .filter(task => 
-        task.taskType === 'water' && 
-        new Date(task.dueDate).getTime() <= Date.now() + 24 * 60 * 60 * 1000
-      )
-      .length;
+    const overdueTasks = await this.db.select().from(schema.careTasks)
+      .innerJoin(schema.plants, eq(schema.careTasks.plantId, schema.plants.id))
+      .where(and(
+        eq(schema.plants.userId, userId),
+        eq(schema.careTasks.completed, false),
+        eq(schema.careTasks.skipped, false),
+        isNull(schema.careTasks.completedDate), // Ensure not completed
+        isNull(schema.careTasks.skipped), // Ensure not skipped
+        lt(schema.careTasks.dueDate, new Date()) // Tasks due in the past
+      ))
+      .orderBy(desc(schema.careTasks.dueDate));
 
-    // Calculate average plant health
-    let totalHealth = 0;
-    let healthyPlants = 0;
+    const recentActivity = await this.db.select().from(schema.careHistory)
+      .innerJoin(schema.plants, eq(schema.careHistory.plantId, schema.plants.id))
+      .where(and(
+        eq(schema.plants.userId, userId),
+        isNull(schema.careHistory.actionType) // This condition might need adjustment based on desired activity
+      ))
+      .orderBy(desc(schema.careHistory.performedAt))
+      .limit(5);
 
-    for (const plant of plants) {
-      const health = await this.getPlantHealthMetrics(plant.id);
-      if (health && health.overallHealth) {
-        totalHealth += health.overallHealth;
-        if (health.overallHealth >= 75) {
-          healthyPlants++;
-        }
-      }
-    }
+    const plantsNeedingAttention = userPlants.filter(p => p.status === 'needs_care' || p.status === 'unhealthy').length;
 
-    const averageHealth = plants.length > 0 ? Math.round(totalHealth / plants.length) : 0;
+    // Plant health summary (average health)
+    const healthMetrics = await this.db.select({
+        overallHealth: schema.plantHealthMetrics.overallHealth
+      })
+      .from(schema.plantHealthMetrics)
+      .innerJoin(schema.plants, eq(schema.plantHealthMetrics.plantId, schema.plants.id))
+      .where(eq(schema.plants.userId, userId));
     
-    // Get health status text based on average health
-    let healthStatus = 'Good';
-    if (averageHealth >= 85) {
-      healthStatus = 'Excellent';
-    } else if (averageHealth >= 70) {
-      healthStatus = 'Good';
-    } else if (averageHealth >= 50) {
-      healthStatus = 'Fair';
-    } else {
-      healthStatus = 'Needs Attention';
-    }
-
-    // Calculate plants added in the current month
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const newPlantsThisMonth = plants.filter(plant => {
-      if (!plant.acquiredDate) return false;
-      const acquiredDate = new Date(plant.acquiredDate);
-      return acquiredDate.getMonth() === currentMonth && acquiredDate.getFullYear() === currentYear;
-    }).length;
+    const avgHealth = healthMetrics.length > 0 ? 
+      healthMetrics.reduce((sum, m) => sum + (m.overallHealth || 0), 0) / healthMetrics.length : 0;
 
     return {
-      totalPlants: plants.length,
-      plantsNeedingWater,
-      healthStatus,
-      healthPercentage: averageHealth,
-      upcomingTasks: tasks.length,
-      newPlantsThisMonth,
-      name: 'Alex' // Default name for demo
+      totalPlants: userPlants.length,
+      upcomingTasksCount: upcomingTasks.length,
+      overdueTasksCount: overdueTasks.length,
+      plantsNeedingAttention,
+      averagePlantHealth: Math.round(avgHealth),
+      upcomingTasksList: upcomingTasks.map(t => ({ ...t.care_tasks, plantName: t.plants.name, dueDate: t.care_tasks.dueDate ? new Date(t.care_tasks.dueDate) : null })),
+      recentActivityList: recentActivity.map(a => ({ ...a.care_history, plantName: a.plants.name, performedAt: a.care_history.performedAt ? new Date(a.care_history.performedAt) : null }))
     };
   }
 }

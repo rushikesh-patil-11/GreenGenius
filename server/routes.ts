@@ -147,7 +147,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -229,7 +228,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -307,7 +305,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -404,7 +401,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -490,7 +486,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -535,7 +530,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
 
@@ -592,7 +586,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -675,7 +668,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           species: plant.species,
           waterFrequencyDays: plant.waterFrequencyDays,
           // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-          lightRequirement: (plant as any).lightRequirement ?? null,
           lastWatered: plant.lastWatered,
         };
 
@@ -752,7 +744,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -859,7 +850,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -936,7 +926,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1018,7 +1007,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1108,7 +1096,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1208,7 +1195,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1298,7 +1284,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1390,7 +1375,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1507,7 +1491,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1592,7 +1575,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1682,7 +1664,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1784,7 +1765,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1861,7 +1841,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -1939,7 +1918,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -2032,7 +2010,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
@@ -2110,7 +2087,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         species: plant.species,
         waterFrequencyDays: plant.waterFrequencyDays,
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-        lightRequirement: (plant as any).lightRequirement ?? null,
         lastWatered: plant.lastWatered,
       };
       const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);

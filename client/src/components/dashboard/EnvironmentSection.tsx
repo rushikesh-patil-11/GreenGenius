@@ -50,12 +50,7 @@ export function EnvironmentSection({
     ? getEnvironmentStatus(environmentData.humidity, "humidity")
     : { status: "Unknown", color: "text-muted-foreground" };
 
-  const soilMoistureStatus =
-    environmentData.soil_moisture_0_to_10cm !== undefined &&
-    environmentData.soil_moisture_0_to_10cm !== null
-      ? { status: "Set", color: "text-green-500" }
-      : { status: "Unknown", color: "text-muted-foreground" };
-
+  
   return (
     <Card className="bg-white dark:bg-card shadow-natural mb-8">
       <CardContent className="p-6">

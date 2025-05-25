@@ -30,6 +30,7 @@ export function useEnvironment(options?: { enabled?: boolean }) {
         ...environment,
         temperature: environment.temperature ?? weather.current.temperature_2m,
         humidity: environment.humidity ?? weather.current.relative_humidity_2m,
+        soil_moisture_0_to_10cm: environment.soil_moisture_0_to_10cm ?? weather.current.soil_moisture_0_to_10cm,
         // Note: Light level is not directly available from Open-Meteo, keep existing or set to null/default
         lightLevel: environment.lightLevel ?? null, // Or a default like 'unknown'
       };

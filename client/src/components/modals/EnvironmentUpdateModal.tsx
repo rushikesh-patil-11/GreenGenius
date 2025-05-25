@@ -25,7 +25,7 @@ export function EnvironmentUpdateModal({ isOpen, onClose, currentEnvironment, on
     if (currentEnvironment) {
       setTemperature(currentEnvironment.temperature?.toString() || '');
       setHumidity(currentEnvironment.humidity?.toString() || '');
-      setSoilMoisture(''); // Initialize soil moisture state as empty string since it's not in the type
+      setSoilMoisture(currentEnvironment.soil_moisture_0_to_10cm?.toString() || ''); // Initialize soil moisture state from currentEnvironment
     } else {
       setTemperature('');
       setHumidity('');
@@ -37,7 +37,7 @@ export function EnvironmentUpdateModal({ isOpen, onClose, currentEnvironment, on
     const updatedData: Partial<SharedEnvironmentReading> = {};
     if (temperature !== '') updatedData.temperature = parseFloat(temperature);
     if (humidity !== '') updatedData.humidity = parseFloat(humidity);
-    if (soilMoisture !== '') updatedData.soil_moisture_0_to_10cm = parseFloat(soilMoisture); // Include soil moisture in update data
+    // Removed manual soil moisture update: if (soilMoisture !== '') updatedData.soil_moisture_0_to_10cm = parseFloat(soilMoisture); // Include soil moisture in update data
 
     try {
       await updateEnvironmentMutation.mutateAsync(updatedData);
@@ -83,29 +83,30 @@ export function EnvironmentUpdateModal({ isOpen, onClose, currentEnvironment, on
               step="0.1"
             />
           </div>
-          {/* Soil Moisture Input Field */}
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="soilMoisture" className="text-right">
-              Soil Moisture (m³/m³)
-            </Label>
-            <Input
-              id="soilMoisture"
-              value={soilMoisture}
-              onChange={(e) => setSoilMoisture(e.target.value)}
-              className="col-span-3"
-              type="number"
-              step="0.01"
-            />
+          {/* Soil Moisture Input Field - Removed */}
+          {/* <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="soilMoisture" className="text-right">
+                Soil Moisture (m³/m³)
+              </Label>
+              <Input
+                id="soilMoisture"
+                value={soilMoisture}
+                onChange={(e) => setSoilMoisture(e.target.value)}
+                className="col-span-3"
+                type="number"
+                step="0.01"
+              />
+            </div> */}
           </div>
-        </div>
-        <DialogFooter>
-          <Button type="button" onClick={handleSubmit} disabled={updateEnvironmentMutation.isLoading}>
-            {updateEnvironmentMutation.isLoading ? 'Updating...' : 'Save changes'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+          <DialogFooter>
+            <Button type="button" onClick={handleSubmit} disabled={updateEnvironmentMutation.isLoading}>
+              {updateEnvironmentMutation.isLoading ? 'Updating...' : 'Save changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
 }
 
 export default EnvironmentUpdateModal;

@@ -15,8 +15,17 @@ import {
 } from "@shared/schema";
 import { ZodError } from "zod";
 import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
-import { generatePlantRecommendations } from "./services/gemini"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
+import { generatePlantRecommendations, generateAiCareTips } from "./services/gemini"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
 import fetch from 'node-fetch'; // Or your preferred HTTP client
+
+// Helper function to determine season
+function getSeason(date: Date): string {
+  const month = date.getMonth(); // 0 (Jan) to 11 (Dec)
+  if (month >= 2 && month <= 4) return "Spring"; // Mar, Apr, May
+  if (month >= 5 && month <= 7) return "Summer"; // Jun, Jul, Aug
+  if (month >= 8 && month <= 10) return "Autumn"; // Sep, Oct, Nov
+  return "Winter"; // Dec, Jan, Feb
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to validate request body
@@ -65,6 +74,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
+
   app.post('/api/auth/login', async (req, res) => {
     try {
       const { username, password } = req.body;
@@ -88,6 +151,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
+
   // Weather route
   app.get('/api/weather', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
@@ -106,6 +223,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   // Plants routes
   app.get('/api/plants', ClerkExpressRequireAuth(), async (req: any, res) => {
@@ -145,6 +316,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
+
   app.get('/api/plants/:id', async (req, res) => {
     try {
       const plantId = parseInt(req.params.id);
@@ -171,6 +396,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   // New route for plant recommendations
   app.post('/api/plants/:id/recommendations', ClerkExpressRequireAuth(), async (req: any, res) => {
@@ -215,6 +494,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   app.post('/api/plants', ClerkExpressRequireAuth(), async (req: any, res) => {
     console.log(`[routes.ts] POST /api/plants - Route handler started. Storage type from import: ${storage.constructor.name}`); // Log storage type
@@ -316,6 +649,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
+
   app.put('/api/plants/:id', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
       const plantId = parseInt(req.params.id);
@@ -364,6 +751,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
+
   app.delete('/api/plants/:id', async (req, res) => {
     try {
       const plantId = parseInt(req.params.id);
@@ -381,6 +822,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   app.get('/api/plants/:id/health', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
@@ -404,6 +899,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   // Environment readings routes
   app.get('/api/environment', ClerkExpressRequireAuth(), async (req: any, res) => {
@@ -435,6 +984,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   app.post('/api/environment', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
@@ -477,6 +1080,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
+
   // Care tasks routes
   app.get('/api/care-tasks', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
@@ -507,6 +1164,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   app.post('/api/care-tasks', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
@@ -540,6 +1251,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   app.put('/api/care-tasks/:id/complete', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
@@ -599,6 +1364,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
+
   app.put('/api/care-tasks/:id/skip', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
       // Ensure the authenticated user is authorized to skip this task
@@ -624,6 +1443,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   // Recommendations routes
   app.get('/api/recommendations', ClerkExpressRequireAuth(), async (req: any, res) => {
@@ -655,6 +1528,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
   
   // Generate AI recommendations on demand
   app.post('/api/recommendations/generate', ClerkExpressRequireAuth(), async (req: any, res) => {
@@ -699,6 +1626,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
+
   app.put('/api/recommendations/:id/apply', async (req, res) => {
     try {
       const recId = parseInt(req.params.id);
@@ -716,6 +1697,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   // Plant health metrics routes
   app.get('/api/plants/:id/health', async (req, res) => {
@@ -735,6 +1770,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   // Dashboard stats
   app.get('/api/dashboard-stats', ClerkExpressRequireAuth(), async (req: any, res) => {
@@ -770,6 +1859,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
+
   // Care history routes
   app.get('/api/plants/:plantId/care-history', async (req, res) => {
     try {
@@ -788,6 +1931,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return handleError(res, error);
     }
   });
+
+  // New route for AI-powered plant care tips
+  app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // Fetch current weather data (reusing the existing weather endpoint logic for simplicity)
+      // In a real app, you might get location from user profile or plant's location settings
+      const defaultLatitude = 21.37; // Nandurbar, India (example)
+      const defaultLongitude = 74.25;
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${defaultLatitude}&longitude=${defaultLongitude}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&timezone=auto`);
+      if (!weatherResponse.ok) {
+        console.error(`Error fetching weather data for AI tips: ${weatherResponse.statusText}`);
+        // Proceed with default/empty weather data or return an error
+        // For now, let's send a specific error if weather fails, as it's crucial for the tips
+        return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
+      }
+      const weatherData = await weatherResponse.json();
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m,
+        humidity: weatherData.current?.relative_humidity_2m,
+        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
+        // Map weather_code to a textual description if possible, or pass code directly
+        // For simplicity, we'll pass undefined if not directly available or easily mapped
+        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
+        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+      };
+
+      const currentDate = new Date();
+      const season = getSeason(currentDate);
+      const plantType = plant.species || plant.name; // Use species if available, otherwise name
+
+      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+
+      return res.json(aiTips);
+
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+
 
   const httpServer = createServer(app);
   return httpServer;

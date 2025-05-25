@@ -12,6 +12,7 @@ import { eq, desc, sql, and, gte, lte, isNull, inArray, lt, gt, asc } from "driz
 import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js'; 
 import postgres from 'postgres';
 import * as schema from "../shared/schema"; // Import all schema for DB typing
+import { generatePlantRecommendations } from "./services/gemini";
 
 // For upcoming tasks displayed on the dashboard
 export interface UpcomingTaskDisplay extends CareTask {
@@ -513,8 +514,57 @@ export class DbStorage implements IStorage {
           actionType: 'water_recommended',
           // performedAt: new Date(), // Removed: defaultNow() in schema
         });
+        
+        // Create a care task for watering
+        const dueDate = new Date();
+        // For watering, set due date based on typical watering frequency (e.g., 7 days from now)
+        // This is a placeholder; ideally, this would be more dynamic based on AI recommendation details
+        dueDate.setDate(dueDate.getDate() + 7);
+        await this.createCareTask({
+          plantId: plant.id,
+          taskType: 'water',
+          dueDate: dueDate,
+          completed: false,
+          skipped: false,
+        });
       }
     }
+    
+    // Add logic for other recommendation types (e.g., light, pruning) here
+    if (recommendationUpdated.recommendationType === 'pruning' && recommendationUpdated.plantId) {
+      const plant = await this.getPlantById(recommendationUpdated.plantId);
+      if (plant) {
+        // Create a care task for pruning
+        const dueDate = new Date();
+        // For pruning, set due date based on a reasonable timeframe (e.g., 30 days from now)
+        dueDate.setDate(dueDate.getDate() + 30);
+        await this.createCareTask({
+          plantId: plant.id,
+          taskType: 'pruning',
+          dueDate: dueDate,
+          completed: false,
+          skipped: false,
+        });
+      }
+    }
+    
+    if (recommendationUpdated.recommendationType === 'light' && recommendationUpdated.plantId) {
+      const plant = await this.getPlantById(recommendationUpdated.plantId);
+      if (plant) {
+        // Create a care task for light adjustment
+        const dueDate = new Date();
+        // For light, set due date based on a reasonable timeframe (e.g., 1 day from now for immediate action)
+        dueDate.setDate(dueDate.getDate() + 1);
+        await this.createCareTask({
+          plantId: plant.id,
+          taskType: 'light',
+          dueDate: dueDate,
+          completed: false,
+          skipped: false,
+        });
+      }
+    }
+    
     return {
       ...recommendationUpdated,
       plantId: recommendationUpdated.plantId ?? null,
@@ -530,14 +580,36 @@ export class DbStorage implements IStorage {
       .from(schema.plants)
       .where(eq(schema.plants.userId, userId));
 
+    // 2. Fetch the latest environment reading for the user
+    const latestEnvironment = await this.getLatestEnvironmentReadingByUserId(userId);
+
+    if (!latestEnvironment) {
+      console.warn(`[DbStorage] No environment data found for user ${userId}. Cannot generate recommendations.`);
+      return;
+    }
+
     const now = new Date();
 
     for (const plant of userPlants) {
-      // 2. Check for watering recommendations
-      // REMOVED: Logic for watering recommendations based on plant.waterFrequencyDays
+      // 3. Generate recommendations using AI based on plant and environment data
+      try {
+        const aiRecommendations = await generatePlantRecommendations(plant, latestEnvironment);
 
-      // 3. Check for light recommendations
-      // REMOVED: Logic for light recommendations based on plant.lightRequirement
+        // 4. Store the generated recommendations
+        for (const rec of aiRecommendations) {
+          await this.createRecommendation({
+            userId: userId,
+            plantId: plant.id,
+            recommendationType: rec.recommendationType,
+            message: rec.message,
+            applied: false, // Recommendations are initially not applied
+            createdAt: now,
+          });
+        }
+      } catch (error) {
+        console.error(`[DbStorage] Error generating AI recommendations for plant ${plant.id}:`, error);
+        // Continue to the next plant even if one fails
+      }
     }
   }
 

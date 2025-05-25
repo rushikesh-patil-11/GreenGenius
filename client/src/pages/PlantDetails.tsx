@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, Droplet, Sun, Heart, Calendar, Edit, Trash2, AlertTriangle, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Droplet, Sun, Heart, Calendar, Edit, Trash2, AlertTriangle, MoreHorizontal, Sparkles, Brain } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,6 +21,9 @@ export default function PlantDetails() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [location, navigate] = useLocation();
+  const [aiCareTips, setAiCareTips] = useState<Array<{ category: string; tip: string }>>([]);
+  const [isFetchingTips, setIsFetchingTips] = useState(false);
+  const [tipsError, setTipsError] = useState<string | null>(null);
   
   const { plant, healthMetrics, isLoading, error } = usePlantDetails(plantId);
   
@@ -117,6 +120,23 @@ export default function PlantDetails() {
     }
   };
 
+  const fetchAiCareTips = async () => {
+    if (!plant) return;
+    setIsFetchingTips(true);
+    setTipsError(null);
+    setAiCareTips([]); // Clear previous tips
+
+    try {
+      const tips = await apiRequest('POST', `/api/plants/${plantId}/ai-care-tips`, {});
+      setAiCareTips(tips);
+    } catch (err: any) {
+      console.error("Failed to fetch AI care tips:", err);
+      setTipsError(err.message || "Could not load AI-powered care tips. Please try again.");
+    } finally {
+      setIsFetchingTips(false);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-background">
       {/* Desktop Sidebar */}
@@ -198,12 +218,130 @@ export default function PlantDetails() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-textColor dark:text-foreground font-medium flex items-center">
+          {/* AI Care Tips Section */}
+          <div className="mt-8 pt-6 border-t border-border dark:border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold font-poppins text-textColor dark:text-foreground flex items-center">
+                <Sparkles className="mr-2 h-5 w-5 text-primary" /> AI Powered Care Tips
+              </h2>
+              <Button onClick={fetchAiCareTips} disabled={isFetchingTips || !plant} variant="outline" size="sm">
+                {isFetchingTips ? (
+                  <>
+                    <MoreHorizontal className="mr-2 h-4 w-4 animate-spin" /> Generating...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="mr-2 h-4 w-4" /> Get Tips
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {isFetchingTips && (
+              <div className="space-y-3 animate-pulse">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                    <div className="h-4 w-1/3 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
+                    <div className="h-3 w-full bg-gray-300 dark:bg-gray-600 rounded"></div>
+                    <div className="h-3 w-5/6 bg-gray-300 dark:bg-gray-600 rounded mt-1"></div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {tipsError && (
+              <Card className="bg-destructive/10 border-destructive">
+                <CardContent className="p-4 text-center">
+                  <AlertTriangle className="mx-auto h-8 w-8 text-destructive mb-2" />
+                  <p className="text-sm text-destructive-foreground">{tipsError}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {!isFetchingTips && !tipsError && aiCareTips.length > 0 && (
+              <div className="space-y-3">
+                {aiCareTips.map((tip, index) => (
+                  <Card key={index} className="bg-primary/5 dark:bg-primary/10 border-primary/20">
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-primary mb-1 font-poppins">{tip.category}</h3>
+                      <p className="text-sm text-textColor dark:text-foreground">{tip.tip}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+            
+            {!isFetchingTips && !tipsError && aiCareTips.length === 0 && plant && (
+              <p className="text-sm text-muted-foreground text-center py-4">Click "Get Tips" to see AI-powered care advice for your {plant.name}.</p>
+            )}
+          </div>
+
+
                       <Sun className="text-warning mr-2 h-4 w-4" /> Light Level
                     </span>
                     <ProgressBar value={lightLevel} maxValue={100} className="w-32 bg-gray-200 dark:bg-gray-700" color="bg-warning" />
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-textColor dark:text-foreground font-medium flex items-center">
+          {/* AI Care Tips Section */}
+          <div className="mt-8 pt-6 border-t border-border dark:border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold font-poppins text-textColor dark:text-foreground flex items-center">
+                <Sparkles className="mr-2 h-5 w-5 text-primary" /> AI Powered Care Tips
+              </h2>
+              <Button onClick={fetchAiCareTips} disabled={isFetchingTips || !plant} variant="outline" size="sm">
+                {isFetchingTips ? (
+                  <>
+                    <MoreHorizontal className="mr-2 h-4 w-4 animate-spin" /> Generating...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="mr-2 h-4 w-4" /> Get Tips
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {isFetchingTips && (
+              <div className="space-y-3 animate-pulse">
+                {[...Array(2)].map((_, i) => (
+                  <div key={i} className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                    <div className="h-4 w-1/3 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
+                    <div className="h-3 w-full bg-gray-300 dark:bg-gray-600 rounded"></div>
+                    <div className="h-3 w-5/6 bg-gray-300 dark:bg-gray-600 rounded mt-1"></div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {tipsError && (
+              <Card className="bg-destructive/10 border-destructive">
+                <CardContent className="p-4 text-center">
+                  <AlertTriangle className="mx-auto h-8 w-8 text-destructive mb-2" />
+                  <p className="text-sm text-destructive-foreground">{tipsError}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {!isFetchingTips && !tipsError && aiCareTips.length > 0 && (
+              <div className="space-y-3">
+                {aiCareTips.map((tip, index) => (
+                  <Card key={index} className="bg-primary/5 dark:bg-primary/10 border-primary/20">
+                    <CardContent className="p-4">
+                      <h3 className="font-semibold text-primary mb-1 font-poppins">{tip.category}</h3>
+                      <p className="text-sm text-textColor dark:text-foreground">{tip.tip}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+            
+            {!isFetchingTips && !tipsError && aiCareTips.length === 0 && plant && (
+              <p className="text-sm text-muted-foreground text-center py-4">Click "Get Tips" to see AI-powered care advice for your {plant.name}.</p>
+            )}
+          </div>
+
+
                       <Heart className="text-primary mr-2 h-4 w-4" /> Overall Health
                     </span>
                     <ProgressBar 

@@ -93,7 +93,7 @@ export interface IStorage {
   getPlantById(id: number): Promise<Plant | undefined>;
   getPlantsByUserId(userId: number): Promise<Plant[]>;
   createPlant(plant: InsertPlant): Promise<Plant>;
-  updatePlant(id: number, plant: InsertPlant): Promise<Plant | undefined>;
+  updatePlant(id: number, plant: Partial<InsertPlant>): Promise<Plant | undefined>;
   deletePlant(id: number): Promise<boolean>;
 
   // Environment readings operations
@@ -122,539 +122,6 @@ export interface IStorage {
 
   // Dashboard stats
   getDashboardStats(userId: number): Promise<DashboardStats>;
-}
-
-// Memory storage implementation
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private plants: Map<number, Plant>;
-  private environmentReadings: Map<number, EnvironmentReading>;
-  private careTasks: Map<number, CareTask>;
-  private recommendations: Map<number, Recommendation>;
-  private careHistory: Map<number, CareHistory>;
-  private plantHealthMetrics: Map<number, PlantHealthMetric>;
-  
-  private userId: number;
-  private plantId: number;
-  private readingId: number;
-  private taskId: number;
-  private recommendationId: number;
-  private historyId: number;
-  private metricId: number;
-
-  constructor() {
-    this.users = new Map();
-    this.plants = new Map();
-    this.environmentReadings = new Map();
-    this.careTasks = new Map();
-    this.recommendations = new Map();
-    this.careHistory = new Map();
-    this.plantHealthMetrics = new Map();
-    
-    this.userId = 1;
-    this.plantId = 1;
-    this.readingId = 1;
-    this.taskId = 1;
-    this.recommendationId = 1;
-    this.historyId = 1;
-    this.metricId = 1;
-
-    // Initialize with a demo user
-    this.createUser({
-      username: "demo",
-      password: null, // Explicitly null for Clerk-based auth
-      email: "demo@example.com",
-      name: "Alex",
-      clerkId: "user_demo_clerk_id"
-    });
-
-    // Add some sample plants
-    const demoPlants = [
-      {
-        userId: 1,
-        name: "Monstera Deliciosa",
-        species: "Swiss Cheese Plant",
-        imageUrl: "https://images.unsplash.com/photo-1614594975525-e45190c55d0b",
-        description: "A popular indoor plant with characteristic leaf holes",
-        acquiredDate: new Date("2023-01-15"),
-        status: "healthy",
-        waterFrequencyDays: 7,
-        lightRequirement: "medium",
-        lastWatered: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) // 5 days ago
-      },
-      {
-        userId: 1,
-        name: "Peace Lily",
-        species: "Spathiphyllum",
-        imageUrl: "https://pixabay.com/get/gd3872ec51135e9ccfb5527e2226721bf55cfccd5e22446a4fa4f1e36091598b56256f96483eb255940270d1fdfda9069908a47422f0e5982c1745b7e390253d3_1280.jpg",
-        description: "Elegant indoor plant with white flowers",
-        acquiredDate: new Date("2023-02-20"),
-        status: "needs_care",
-        waterFrequencyDays: 5,
-        lightRequirement: "low",
-        lastWatered: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000) // 6 days ago
-      },
-      {
-        userId: 1,
-        name: "Snake Plant",
-        species: "Sansevieria Trifasciata",
-        imageUrl: "https://pixabay.com/get/g17c7914976a7ff5f973ff8daeaf49101b4cf86c436cc0177f62f24378d76ed72ef5cb88bf4dab37b20ce8d42542f10750651d0f79a0d10f6b017c6441c19a6b0_1280.jpg",
-        description: "Low-maintenance plant with stiff, upright leaves",
-        acquiredDate: new Date("2023-03-10"),
-        status: "healthy",
-        waterFrequencyDays: 14,
-        lightRequirement: "low",
-        lastWatered: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000) // 4 days ago
-      }
-    ];
-
-    demoPlants.forEach(plant => this.createPlant(plant));
-
-    // Add an environment reading
-    this.createEnvironmentReading({
-      userId: 1,
-      temperature: 22,
-      humidity: 45,
-      lightLevel: "medium"
-    });
-
-    // Generate initial recommendations
-    this.generateRecommendations(1);
-
-    // Create initial care tasks
-    this.createCareTask({
-      plantId: 2, // Peace Lily
-      taskType: "water",
-      dueDate: new Date()
-    });
-
-    this.createCareTask({
-      plantId: 1, // Monstera
-      taskType: "prune",
-      dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000) // Tomorrow
-    });
-
-    this.createCareTask({
-      plantId: 3, // Snake Plant
-      taskType: "water",
-      dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) // 2 days from now
-    });
-
-    // Initialize health metrics for each plant
-    this.plants.forEach((plant) => {
-      this.updatePlantHealthMetrics(plant.id);
-    });
-  }
-
-  // User operations
-  async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    for (const user of Array.from(this.users.values())) {
-      if (user.username === username) {
-        return user;
-      }
-    }
-    return undefined;
-  }
-
-  async getUserByClerkId(clerkId: string): Promise<User | undefined> {
-    for (const user of Array.from(this.users.values())) {
-      if (user.clerkId === clerkId) {
-        return user;
-      }
-    }
-    return undefined;
-  }
-
-  async getOrCreateUserByClerkId(clerkId: string, clerkUserData: { email: string; username?: string | null; firstName?: string | null; lastName?: string | null }): Promise<User> {
-    let user = await this.getUserByClerkId(clerkId);
-    if (user) {
-      return user;
-    }
-
-    let name = (clerkUserData.firstName && clerkUserData.lastName) 
-      ? `${clerkUserData.firstName} ${clerkUserData.lastName}` 
-      : clerkUserData.firstName || clerkUserData.lastName || clerkUserData.username || clerkUserData.email.split('@')[0];
-    if (!name) name = 'New User';
-
-    let username = clerkUserData.username || clerkUserData.email.split('@')[0];
-    // Ensure username is unique in MemStorage
-    let uniqueUsername = username;
-    let counter = 1;
-    while (Array.from(this.users.values()).some(u => u.username === uniqueUsername)) {
-      uniqueUsername = `${username}${counter++}`;
-    }
-
-    const newUser: User = {
-      id: this.userId++,
-      clerkId,
-      email: clerkUserData.email,
-      name,
-      username: uniqueUsername,
-      password: null, // Clerk handles auth
-    };
-    this.users.set(newUser.id, newUser);
-    return newUser;
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const newUser: User = {
-      id: this.userId++,
-      clerkId: insertUser.clerkId, // clerkId is now mandatory in InsertUser via schema
-      username: insertUser.username,
-      password: insertUser.password ?? null, // Ensure password is null if undefined
-      email: insertUser.email,
-      name: insertUser.name,
-    };
-    this.users.set(newUser.id, newUser);
-    return newUser;
-  }
-
-  // Plant operations
-  async getPlantById(id: number): Promise<Plant | undefined> {
-    return this.plants.get(id);
-  }
-
-  async getPlantsByUserId(userId: number): Promise<Plant[]> {
-    return Array.from(this.plants.values()).filter(
-      (plant) => plant.userId === userId
-    );
-  }
-
-  async createPlant(insertPlant: InsertPlant): Promise<Plant> {
-    const id = this.plantId++;
-    const plant: Plant = {
-      id,
-      userId: insertPlant.userId,
-      name: insertPlant.name,
-      species: insertPlant.species ?? null,
-      imageUrl: insertPlant.imageUrl ?? null,
-      description: insertPlant.description ?? null,
-      acquiredDate: insertPlant.acquiredDate ?? null,
-      status: insertPlant.status ?? null,
-      waterFrequencyDays: insertPlant.waterFrequencyDays ?? null,
-      lightRequirement: insertPlant.lightRequirement ?? null,
-      lastWatered: insertPlant.lastWatered ?? null,
-    };
-    this.plants.set(id, plant);
-
-    // Initialize health metrics for the new plant
-    await this.updatePlantHealthMetrics(id);
-
-    // Create initial watering task
-    if (insertPlant.waterFrequencyDays) {
-      const dueDate = new Date();
-      dueDate.setDate(dueDate.getDate() + insertPlant.waterFrequencyDays);
-      
-      await this.createCareTask({
-        plantId: id,
-        taskType: "water",
-        dueDate
-      });
-    }
-
-    return plant;
-  }
-
-  async updatePlant(id: number, updatePlant: InsertPlant): Promise<Plant | undefined> {
-    const plant = this.plants.get(id);
-    if (!plant) return undefined;
-
-    const updatedPlant: Plant = { ...plant, ...updatePlant, id };
-    this.plants.set(id, updatedPlant);
-    return updatedPlant;
-  }
-
-  async deletePlant(id: number): Promise<boolean> {
-    return this.plants.delete(id);
-  }
-
-  // Environment readings operations
-  async getLatestEnvironmentReadingByUserId(userId: number): Promise<EnvironmentReading | undefined> {
-    const userReadings = Array.from(this.environmentReadings.values())
-      .filter(reading => reading.userId === userId)
-      .sort((a, b) => {
-        // Handle potentially null or non-Date timestamps
-        const timeA = a.readingTimestamp instanceof Date ? a.readingTimestamp.getTime() : -Infinity; // Treat null/invalid as oldest
-        const timeB = b.readingTimestamp instanceof Date ? b.readingTimestamp.getTime() : -Infinity; // Treat null/invalid as oldest
-        return timeB - timeA; // Sorts descending (latest first)
-      });
-    
-    return userReadings[0];
-  }
-
-  async createEnvironmentReading(insertReading: InsertEnvironmentReading): Promise<EnvironmentReading> {
-    const id = this.readingId++;
-    const reading: EnvironmentReading = { 
-      id,
-      userId: insertReading.userId,
-      temperature: insertReading.temperature ?? null,
-      humidity: insertReading.humidity ?? null,
-      lightLevel: insertReading.lightLevel ?? null,
-      readingTimestamp: new Date() 
-    };
-    this.environmentReadings.set(id, reading);
-    return reading;
-  }
-
-  // Care tasks operations
-  async getCareTasksByUserId(userId: number): Promise<CareTask[]> {
-    const userPlants = await this.getPlantsByUserId(userId);
-    const plantIds = userPlants.map(plant => plant.id);
-    
-    return Array.from(this.careTasks.values())
-      .filter(task => plantIds.includes(task.plantId) && !task.completed && !task.skipped)
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  }
-
-  async createCareTask(insertTask: InsertCareTask): Promise<CareTask> {
-    const id = this.taskId++;
-    const task: CareTask = { 
-      ...insertTask, 
-      id, 
-      completed: false, 
-      completedDate: null,
-      skipped: false
-    };
-    this.careTasks.set(id, task);
-    return task;
-  }
-
-  async completeCareTask(id: number): Promise<CareTask | undefined> {
-    const task = this.careTasks.get(id);
-    if (!task) return undefined;
-
-    const updatedTask: CareTask = { 
-      ...task, 
-      completed: true, 
-      completedDate: new Date() 
-    };
-    this.careTasks.set(id, updatedTask);
-
-    // If it's a recurring task like watering, create the next task
-    if (task.taskType === 'water') {
-      const plant = await this.getPlantById(task.plantId);
-      if (plant && plant.waterFrequencyDays) {
-        const nextDueDate = new Date();
-        nextDueDate.setDate(nextDueDate.getDate() + plant.waterFrequencyDays);
-        
-        await this.createCareTask({
-          plantId: plant.id,
-          taskType: "water",
-          dueDate: nextDueDate
-        });
-      }
-    }
-
-    return updatedTask;
-  }
-
-  async skipCareTask(id: number): Promise<CareTask | undefined> {
-    const task = this.careTasks.get(id);
-    if (!task) return undefined;
-
-    const updatedTask: CareTask = { 
-      ...task, 
-      skipped: true 
-    };
-    this.careTasks.set(id, updatedTask);
-    return updatedTask;
-  }
-
-  // Recommendations operations
-  async getRecommendationsByUserId(userId: number): Promise<Recommendation[]> {
-    return Array.from(this.recommendations.values())
-      .filter(rec => rec.userId === userId && !rec.applied)
-      .sort((a, b) => {
-        const timeA = a.createdAt instanceof Date ? a.createdAt.getTime() : Number.MIN_SAFE_INTEGER;
-        const timeB = b.createdAt instanceof Date ? b.createdAt.getTime() : Number.MIN_SAFE_INTEGER;
-        return timeB - timeA; // Sorts newest first; nulls will be oldest
-      });
-  }
-
-  async createRecommendation(insertRecommendation: InsertRecommendation): Promise<Recommendation> {
-    const id = this.recommendationId++;
-    const recommendation: Recommendation = { 
-      id,
-      userId: insertRecommendation.userId,
-      plantId: insertRecommendation.plantId ?? null,
-      recommendationType: insertRecommendation.recommendationType,
-      message: insertRecommendation.message,
-      applied: false, 
-      createdAt: new Date() 
-    };
-    this.recommendations.set(id, recommendation);
-    return recommendation;
-  }
-
-  async applyRecommendation(id: number): Promise<Recommendation | undefined> {
-    const recommendation = this.recommendations.get(id);
-    if (!recommendation) return undefined;
-
-    const updatedRecommendation: Recommendation = { 
-      ...recommendation, 
-      applied: true 
-    };
-    this.recommendations.set(id, updatedRecommendation);
-    return updatedRecommendation;
-  }
-
-  async generateRecommendations(userId: number): Promise<void> {
-    const plants = await this.getPlantsByUserId(userId);
-    const latestReading = await this.getLatestEnvironmentReadingByUserId(userId);
-    
-    if (!latestReading) return;
-
-    // Generate watering recommendations based on humidity
-    if (latestReading.humidity && latestReading.humidity < 50) {
-      for (const plant of plants) {
-        if (plant.waterFrequencyDays && plant.waterFrequencyDays < 10) {
-          await this.createRecommendation({
-            userId,
-            plantId: plant.id,
-            recommendationType: "water",
-            message: `Your ${plant.name} plant may need less frequent watering. Based on the current humidity levels, consider watering once every 9 days instead of weekly.`
-          });
-        }
-      }
-    }
-
-    // Generate light recommendations
-    if (latestReading.lightLevel === "low") {
-      for (const plant of plants) {
-        if (plant.lightRequirement === "medium" || plant.lightRequirement === "high") {
-          await this.createRecommendation({
-            userId,
-            plantId: plant.id,
-            recommendationType: "light",
-            message: `Your ${plant.name} shows signs of insufficient light. Consider moving it closer to an east-facing window for more indirect sunlight.`
-          });
-        }
-      }
-    }
-  }
-
-  // Care history operations
-  async getCareHistoryByPlantId(plantId: number): Promise<CareHistory[]> {
-    return Array.from(this.careHistory.values())
-      .filter(history => history.plantId === plantId)
-      .sort((a, b) => {
-        if (a.performedAt === null && b.performedAt === null) {
-          return 0; // both null, treat as equal
-        }
-        if (a.performedAt === null) {
-          return 1; // a is null, b is not; a comes after b (nulls last)
-        }
-        if (b.performedAt === null) {
-          return -1; // b is null, a is not; b comes after a (nulls last)
-        }
-        // Both are non-null Date objects
-        return b.performedAt.getTime() - a.performedAt.getTime();
-      });
-  }
-
-  async createCareHistory(history: InsertCareHistory): Promise<CareHistory> {
-    const id = this.historyId++;
-    const newHistory: CareHistory = { 
-      ...history, 
-      id, 
-      performedAt: new Date(),
-      notes: history.notes ?? null, // Ensure notes is string or null
-    };
-    this.careHistory.set(id, newHistory);
-    return newHistory;
-  }
-
-  // Plant health metrics
-  async getPlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined> {
-    return this.plantHealthMetrics.get(plantId);
-  }
-
-  async updatePlantHealthMetrics(plantId: number, metricsInput?: Partial<schema.InsertPlantHealthMetric>): Promise<schema.PlantHealthMetric | undefined> {
-    const plant = this.plants.get(plantId);
-    if (!plant) return undefined;
-
-    const plantOverallHealthStatusString = plant.lastWatered && (new Date().getTime() - plant.lastWatered.getTime()) / (1000 * 60 * 60 * 24) > (plant.waterFrequencyDays ?? 7) + 2
-      ? 'needs_attention'
-      : 'healthy';
-    
-    const existingMetric = this.plantHealthMetrics.get(plantId);
-
-    // 'issues' and 'recommendations' are not part of plantHealthMetrics schema.
-    // They should be handled via the 'recommendations' table or derived dynamically.
-
-    const newMetricData = {
-      plantId,
-      overallHealth: metricsInput?.overallHealth ?? existingMetric?.overallHealth ?? healthStatusToNumeric(plantOverallHealthStatusString),
-      // lastChecked was incorrect, schema uses updatedAt
-      updatedAt: new Date(), 
-      waterLevel: metricsInput?.waterLevel ?? existingMetric?.waterLevel ?? null,
-      lightLevel: metricsInput?.lightLevel ?? existingMetric?.lightLevel ?? null,
-      // issues: undefined, // Not in schema
-      // recommendations: undefined, // Not in schema
-    } as Omit<schema.PlantHealthMetric, 'id'>; // Ensure this matches schema.PlantHealthMetric excluding 'id'
-
-    if (existingMetric) {
-      // Ensure we only spread properties that exist on existingMetric and newMetricData aligns with PlantHealthMetric
-      const updatedMetric: schema.PlantHealthMetric = { 
-        ...existingMetric, 
-        plantId: newMetricData.plantId,
-        overallHealth: newMetricData.overallHealth,
-        updatedAt: newMetricData.updatedAt,
-        waterLevel: newMetricData.waterLevel,
-        lightLevel: newMetricData.lightLevel,
-      };
-      this.plantHealthMetrics.set(plantId, updatedMetric);
-      return updatedMetric;
-    } else {
-      const newDbMetric: schema.PlantHealthMetric = {
-        id: this.metricId++, // Assign new ID only for new metrics
-        plantId: newMetricData.plantId,
-        overallHealth: newMetricData.overallHealth,
-        updatedAt: newMetricData.updatedAt,
-        waterLevel: newMetricData.waterLevel,
-        lightLevel: newMetricData.lightLevel,
-      };
-      this.plantHealthMetrics.set(plantId, newDbMetric);
-      return newDbMetric;
-    }
-  }
-
-  // Dashboard stats
-  async getDashboardStats(userId: number): Promise<any> {
-    const userPlants = Array.from(this.plants.values()).filter(p => p.userId === userId);
-    const userCareTasks = Array.from(this.careTasks.values()).filter(ct => userPlants.some(p => p.id === ct.plantId));
-    const userCareHistory = Array.from(this.careHistory.values()).filter(ch => userPlants.some(p => p.id === ch.plantId));
-
-    const upcomingTasks = userCareTasks
-      // Assuming CareTask has 'completed' and 'skipped' booleans, and no 'status' field
-      .filter(t => t.dueDate && t.dueDate > new Date() && !t.completed && !t.skipped)
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-      .slice(0, 5);
-
-    const recentActivities = userCareHistory
-      .sort((a,b) => (b.performedAt ? b.performedAt.getTime() : 0) - (a.performedAt ? a.performedAt.getTime() : 0))
-      .slice(0,5);
-
-    return {
-      totalPlants: userPlants.length,
-      plantsHealthy: userPlants.filter(p => p.status === 'healthy').length,
-      plantsNeedCare: userPlants.filter(p => p.status === 'needs_care' || p.status === 'needs_attention').length,
-      upcomingTasks: upcomingTasks.map(t => ({
-        ...t,
-        plantName: this.plants.get(t.plantId)?.name,
-        dueDate: t.dueDate ? new Date(t.dueDate) : null,
-      })),
-      recentActivities: recentActivities.map(a => ({
-        ...a,
-        plantName: this.plants.get(a.plantId)?.name,
-        performedAt: a.performedAt ? new Date(a.performedAt) : null,
-      })),
-    };
-  }
 }
 
 // Database storage implementation
@@ -769,15 +236,51 @@ export class DbStorage implements IStorage {
   }
 
   async createPlant(plant: InsertPlant): Promise<Plant> {
-    const [newPlant] = await this.db.insert(schema.plants).values(plant).returning();
-    return {
-      ...newPlant,
-      acquiredDate: newPlant.acquiredDate ? new Date(newPlant.acquiredDate) : null,
-      lastWatered: newPlant.lastWatered ? new Date(newPlant.lastWatered) : null,
-    } as Plant;
+    console.log('[storage.ts] DbStorage.createPlant: Attempting to insert plant:', JSON.stringify(plant, null, 2));
+    try {
+      const [newPlantFromDb] = await this.db.insert(schema.plants).values(plant).returning();
+
+      console.log('[storage.ts] DbStorage.createPlant: Result from DB insert:', JSON.stringify(newPlantFromDb, null, 2));
+
+      // Check if newPlantFromDb is valid and has an ID (assuming ID is a number and should be > 0)
+      if (!newPlantFromDb || typeof newPlantFromDb.id !== 'number' || newPlantFromDb.id <= 0) {
+        const errorMsg = '[storage.ts] DbStorage.createPlant: ERROR - Plant insertion failed or did not return a valid ID.';
+        console.error(errorMsg, 'Received:', JSON.stringify(newPlantFromDb, null, 2));
+        throw new Error('Plant creation in DB failed to return a valid plant with ID.');
+      }
+
+      // Create initial health metrics for the new plant
+      try {
+        await this.updatePlantHealthMetrics(newPlantFromDb.id);
+        console.log(`[storage.ts] DbStorage.createPlant: Successfully created initial health metrics for plant ID: ${newPlantFromDb.id}`);
+      } catch (metricsError) {
+        // Log the error, but don't let it block returning the created plant if the plant itself was created.
+        // Depending on requirements, you might want to make this a transactional operation or handle the error more strictly.
+        console.error(`[storage.ts] DbStorage.createPlant: ERROR creating initial health metrics for plant ID: ${newPlantFromDb.id}`, metricsError);
+        // Optionally, re-throw if metrics are critical for plant creation to be considered successful:
+        // throw new Error(`Failed to create initial health metrics for plant ${newPlantFromDb.id}: ${metricsError.message}`);
+      }
+
+      // Convert date strings from DB to Date objects for the returned Plant object
+      const resultPlant = {
+        ...newPlantFromDb,
+        acquiredDate: newPlantFromDb.acquiredDate ? new Date(newPlantFromDb.acquiredDate) : null,
+        lastWatered: newPlantFromDb.lastWatered ? new Date(newPlantFromDb.lastWatered) : null,
+      };
+
+      console.log('[storage.ts] DbStorage.createPlant: Returning plant:', JSON.stringify(resultPlant, null, 2));
+      // The 'as Plant' cast assumes resultPlant now conforms to the Plant type.
+      // This was present in the original code and is kept for consistency.
+      return resultPlant as Plant;
+
+    } catch (error) {
+      console.error('[storage.ts] DbStorage.createPlant: ERROR during plant insertion:', error);
+      // Re-throw the error so the route handler can catch it and send an appropriate HTTP error
+      throw error;
+    }
   }
 
-  async updatePlant(id: number, plantData: InsertPlant): Promise<Plant | undefined> {
+  async updatePlant(id: number, plantData: Partial<InsertPlant>): Promise<Plant | undefined> {
     const [updatedPlant] = await this.db.update(schema.plants).set(plantData).where(eq(schema.plants.id, id)).returning();
     if (!updatedPlant) return undefined;
     return {
@@ -788,8 +291,24 @@ export class DbStorage implements IStorage {
   }
 
   async deletePlant(id: number): Promise<boolean> {
-    const result = await this.db.delete(schema.plants).where(eq(schema.plants.id, id)).returning({ id: schema.plants.id });
-    return result.length > 0;
+    try {
+      // Corrected: this.db instead of this.db()
+      // Corrected: explicit type for tx (PostgresJsDatabase<typeof schema>)
+      const result = await this.db.transaction(async (tx: PostgresJsDatabase<typeof schema>) => {
+        // First, delete associated plant health metrics
+        await tx.delete(schema.plantHealthMetrics).where(eq(schema.plantHealthMetrics.plantId, id));
+        
+        // Then, delete the plant itself
+        const deleteResult = await tx.delete(schema.plants).where(eq(schema.plants.id, id)).returning();
+        return deleteResult.length > 0;
+      });
+      return result;
+    } catch (error) {
+      console.error(`[DbStorage] Error deleting plant with ID ${id}:`, error);
+      // Potentially re-throw or handle specific error types if needed
+      // For now, returning false indicates failure
+      return false;
+    }
   }
 
   // Environment readings operations
@@ -859,6 +378,11 @@ export class DbStorage implements IStorage {
   }
 
   async completeCareTask(id: number): Promise<CareTask | undefined> {
+    const task = await this.db.query.careTasks.findFirst({
+      where: eq(schema.careTasks.id, id),
+    });
+    if (!task) return undefined;
+
     const [updatedTask] = await this.db
       .update(schema.careTasks)
       .set({ completed: true, completedDate: new Date() })
@@ -885,11 +409,10 @@ export class DbStorage implements IStorage {
         await this.createCareTask({
           plantId: plant.id,
           taskType: "water",
-          dueDate: nextDueDate,
-          // Other fields like 'notes' can be omitted or set to default
+          dueDate: nextDueDate
         });
         // Update lastWatered for the plant
-        await this.updatePlant(plant.id, { ...plant, lastWatered: new Date(updatedTask.completedDate || Date.now()) });
+        await this.updatePlant(plant.id, { lastWatered: new Date(updatedTask.completedDate || Date.now()) });
       }
     }
     return {
@@ -917,7 +440,10 @@ export class DbStorage implements IStorage {
   // Recommendations operations
   async getRecommendationsByUserId(userId: number): Promise<Recommendation[]> {
     const result = await this.db.select().from(schema.recommendations)
-      .where(and(eq(schema.recommendations.userId, userId), eq(schema.recommendations.applied, false)))
+      .where(and(
+        eq(schema.recommendations.userId, userId),
+        eq(schema.recommendations.applied, false)
+      ))
       .orderBy(desc(schema.recommendations.createdAt));
 
     return result.map(rec => ({
@@ -947,19 +473,24 @@ export class DbStorage implements IStorage {
   }
 
   async applyRecommendation(id: number): Promise<Recommendation | undefined> {
-    const [recommendation] = await this.db
+    const recommendation = await this.db.query.recommendations.findFirst({
+      where: eq(schema.recommendations.id, id),
+    });
+    if (!recommendation) return undefined;
+
+    const [recommendationUpdated] = await this.db
       .update(schema.recommendations)
       .set({ applied: true })
       .where(eq(schema.recommendations.id, id))
       .returning();
     
-    if (!recommendation) return undefined;
+    if (!recommendationUpdated) return undefined;
     
     // Example: If it's a watering recommendation, update plant's lastWatered and create history
-    if (recommendation.recommendationType === 'water' && recommendation.plantId) {
-      const plant = await this.getPlantById(recommendation.plantId);
+    if (recommendationUpdated.recommendationType === 'water' && recommendationUpdated.plantId) {
+      const plant = await this.getPlantById(recommendationUpdated.plantId);
       if (plant) {
-        await this.updatePlant(plant.id, { ...plant, lastWatered: new Date() });
+        await this.updatePlant(plant.id, { lastWatered: new Date() });
         // 'performedAt' is set by default in the DB schema, so we don't pass it here.
         await this.createCareHistory({
           plantId: plant.id,
@@ -969,10 +500,10 @@ export class DbStorage implements IStorage {
       }
     }
     return {
-      ...recommendation,
-      plantId: recommendation.plantId ?? null,
-      applied: recommendation.applied ?? false,
-      createdAt: recommendation.createdAt ? new Date(recommendation.createdAt) : new Date(),
+      ...recommendationUpdated,
+      plantId: recommendationUpdated.plantId ?? null,
+      applied: recommendationUpdated.applied ?? false,
+      createdAt: recommendationUpdated.createdAt ? new Date(recommendationUpdated.createdAt) : new Date(),
     } as Recommendation;
   }
 
@@ -987,34 +518,10 @@ export class DbStorage implements IStorage {
 
     for (const plant of userPlants) {
       // 2. Check for watering recommendations
-      if (plant.lastWatered && plant.waterFrequencyDays) {
-        const lastWateredTime = new Date(plant.lastWatered).getTime();
-        const overdueTime = lastWateredTime + plant.waterFrequencyDays * 24 * 60 * 60 * 1000;
-        
-        // If current time is past the overdue time + a 2-day grace period (example)
-        if (now.getTime() > overdueTime) {
-          // Check if a similar recommendation already exists and is not applied
-          const existingRec = await this.db.query.recommendations.findFirst({
-            where: and(
-              eq(schema.recommendations.userId, userId),
-              eq(schema.recommendations.plantId, plant.id),
-              eq(schema.recommendations.recommendationType, 'water'),
-              eq(schema.recommendations.applied, false)
-            )
-          });
+      // REMOVED: Logic for watering recommendations based on plant.waterFrequencyDays
 
-          if (!existingRec) {
-            await this.createRecommendation({
-              userId: userId,
-              plantId: plant.id,
-              recommendationType: 'water',
-              message: `Your ${plant.name} is overdue for watering. Last watered on ${new Date(plant.lastWatered).toLocaleDateString()}.`,
-              // 'applied' and 'createdAt' will be set by default by createRecommendation or schema
-            });
-          }
-        }
-      }
-      // TODO: Add other recommendation types (e.g., light, fertilization) based on plant properties or health metrics
+      // 3. Check for light recommendations
+      // REMOVED: Logic for light recommendations based on plant.lightRequirement
     }
   }
 
@@ -1207,3 +714,4 @@ export class DbStorage implements IStorage {
 // Initialize database storage
 // The actual DB connection is now deferred to initializeDatabase()
 export const storage = new DbStorage();
+console.log(`[storage.ts] EXPORTING storage instance of type: ${storage.constructor.name} at module load`);

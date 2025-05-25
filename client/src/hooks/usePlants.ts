@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueries } from "@tanstack/react-query";
 import { Plant, PlantHealthMetric } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
@@ -20,25 +20,33 @@ export function usePlants(options?: { enabled?: boolean }) {
     enabled: options?.enabled,
   });
 
-  const healthMetricsQueries = plants.map((plant) => {
-    return useQuery<PlantHealthMetric>({
-      queryKey: ['/api/plants', plant.id, 'health'],
-      queryFn: async () => {
-        const response = await fetch(`/api/plants/${plant.id}/health`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch plant health metrics');
-        }
-        return response.json();
-      },
-      enabled: plants.length > 0 && !!options?.enabled,
-    });
+  // Conditionally create health metrics queries only if plants data is available and valid
+  const validPlants = Array.isArray(plants) ? plants : [];
+
+  // Use useQueries for health metrics to avoid calling hooks in a loop
+  const healthMetricsResults = useQueries({
+    queries: validPlants.map((plant) => {
+      return {
+        queryKey: ['/api/plants', plant.id, 'health'],
+        queryFn: async () => {
+          const response = await fetch(`/api/plants/${plant.id}/health`);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch plant health metrics for plant ${plant.id}`);
+          }
+          return response.json() as Promise<PlantHealthMetric>; // Ensure the return type is a Promise
+        },
+        // Enable query if plant.id exists and the main hook options.enabled is not explicitly false
+        enabled: !!plant?.id && (options?.enabled ?? true),
+      };
+    }),
   });
 
-  const isHealthMetricsLoading = healthMetricsQueries.some(query => query.isLoading);
+  const isHealthMetricsLoading = healthMetricsResults.some(query => query.isLoading);
   
-  const healthMetrics = plants.reduce((acc, plant, index) => {
-    if (healthMetricsQueries[index].data) {
-      acc[plant.id] = healthMetricsQueries[index].data;
+  const healthMetrics = validPlants.reduce((acc, plant, index) => {
+    // Ensure healthMetricsResults[index] and its data property exist
+    if (healthMetricsResults[index]?.data) {
+      acc[plant.id] = healthMetricsResults[index].data as PlantHealthMetric;
     }
     return acc;
   }, {} as Record<number, PlantHealthMetric>);

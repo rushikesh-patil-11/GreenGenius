@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useParams, Link } from "wouter";
-import { ArrowLeft, Droplet, Sun, Heart, Calendar, Edit, Trash2, AlertTriangle } from "lucide-react";
+import { useParams, Link, useLocation } from "wouter";
+import { ArrowLeft, Droplet, Sun, Heart, Calendar, Edit, Trash2, AlertTriangle, MoreHorizontal } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { usePlantDetails } from "@/hooks/usePlants";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDate, formatNextWatering, getHealthStatus } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
@@ -19,7 +20,7 @@ export default function PlantDetails() {
   const { toast } = useToast();
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   
   const { plant, healthMetrics, isLoading, error } = usePlantDetails(plantId);
   
@@ -146,19 +147,29 @@ export default function PlantDetails() {
                 </div>
               )}
               <div className="absolute top-4 right-4 flex space-x-2">
-                <Link href={`/plants/${plantId}/edit`}>
-                  <Button variant="outline" size="icon" className="bg-white/90 dark:bg-black/50 h-10 w-10 rounded-full">
-                    <Edit className="h-5 w-5" />
-                  </Button>
-                </Link>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  className="bg-white/90 dark:bg-black/50 h-10 w-10 rounded-full text-destructive hover:text-destructive"
-                  onClick={() => setIsDeleteDialogOpen(true)}
-                >
-                  <Trash2 className="h-5 w-5" />
-                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-2" align="end">
+                    <div className="flex flex-col space-y-1">
+                      <Link href={`/plants/${plantId}/edit`} className="w-full block">
+                        <Button variant="ghost" className="w-full justify-start text-sm h-9 font-normal">
+                          <Edit className="mr-2 h-4 w-4" /> Edit Plant
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 text-sm h-9 font-normal"
+                        onClick={() => setIsDeleteDialogOpen(true)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete Plant
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
             

@@ -23,12 +23,10 @@ export const plants = pgTable("plants", {
   name: text("name").notNull(),
   species: text("species"),
   imageUrl: text("image_url"),
-  description: text("description"),
   acquiredDate: timestamp("acquired_date"),
   status: text("status").default("healthy"),
-  waterFrequencyDays: integer("water_frequency_days"),
-  lightRequirement: text("light_requirement"),
   lastWatered: timestamp("last_watered"),
+  waterFrequencyDays: integer("water_frequency_days"),
 });
 
 // Create the base schema
@@ -38,9 +36,13 @@ const basePlantSchema = createInsertSchema(plants).omit({
 
 // Create a modified schema with basic validation
 export const insertPlantSchema = basePlantSchema.extend({
-  // We're handling date conversion manually in the route handler now
-  lastWatered: z.any(),
-  acquiredDate: z.any()
+  name: z.string().min(1, "Plant name is required"), // Ensure name is not empty
+  species: z.string().optional().nullable(),
+  imageUrl: z.string().url({ message: "Invalid URL format" }).optional().nullable(), // Validate as URL, optional and nullable
+  acquiredDate: z.coerce.date().optional().nullable(), // Allow null in addition to undefined
+  status: z.string().optional().nullable(),
+  lastWatered: z.coerce.date().optional().nullable(), // Allow null in addition to undefined
+  waterFrequencyDays: z.number().int().positive().optional().nullable(),
 });
 
 // Environment readings schema

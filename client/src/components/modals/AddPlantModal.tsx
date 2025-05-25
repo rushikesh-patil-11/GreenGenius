@@ -5,11 +5,11 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form"; // Import FieldErrors
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertPlantSchema, type Plant, type InsertPlant } from "@shared/schema";
 import { z } from "zod";
-// import { apiRequest } from "@/lib/apiRequest";
+import { apiRequest } from "@/lib/apiRequest";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 
@@ -21,57 +21,35 @@ interface AddPlantModalProps {
 
 // Form schema for validation, excluding id and userId which are handled by backend
 const addPlantFormSchema = insertPlantSchema.omit({ userId: true });
+// Infer type for form data
+type AddPlantFormData = z.infer<typeof addPlantFormSchema>;
 
 export function AddPlantModal({ isOpen, onClose, onAddPlant }: AddPlantModalProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Get current date as YYYY-MM-DD format for default value
-  const getTodayDateString = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
-  };
+  // Removed getTodayDateString as default for lastWatered is now new Date()
 
-  const form = useForm<Omit<InsertPlant, 'id' | 'userId'>>({
+  const form = useForm<AddPlantFormData>({
     resolver: zodResolver(addPlantFormSchema),
     defaultValues: {
-      name: "",
-      species: "",
-      imageUrl: "",
-      description: "",
-      waterFrequencyDays: 7,
-      lightRequirement: "medium",
-      lastWatered: getTodayDateString(),
-      status: 'healthy',
+      name: "", // name is required, so empty string is a common default
+      species: undefined, // Optional field
+      imageUrl: undefined, // Optional field
+      acquiredDate: new Date(), // Default to today as Date object
     },
   });
 
-  const onSubmit = async (values: Omit<InsertPlant, 'id' | 'userId'>) => {
+  const onSubmit = async (values: AddPlantFormData) => {
     setIsSubmitting(true);
     
     try {
-      // The server will handle the string date format directly
-      // const newPlant = await apiRequest<Plant>("POST", "/api/plants", values);
-      // Placeholder for newPlant to resolve immediate TS errors
-      const newPlant: Plant = { 
-        ...values, 
-        id: Date.now(), // dummy id
-        userId: 0, // dummy userId
-        // Ensure all Plant properties are here, potentially with default/dummy values
-        name: values.name || "Default Plant Name",
-        species: values.species || null,
-        imageUrl: values.imageUrl || null,
-        description: values.description || null,
-        acquiredDate: values.lastWatered ? new Date(values.lastWatered) : new Date(), // lastWatered is used as acquiredDate in form
-        status: values.status || 'healthy',
-        waterFrequencyDays: values.waterFrequencyDays || 7,
-        lightRequirement: values.lightRequirement || 'medium',
-        lastWatered: values.lastWatered ? new Date(values.lastWatered) : new Date(),
-      };
+      // The server will handle the date objects directly thanks to z.coerce.date()
+      const newPlant = await apiRequest<Plant>("/api/plants", { method: "POST", data: values });
 
       toast({
-        title: "Success",
-        description: `${values.name || 'Plant'} has been submitted.`, // Adjusted message
+        title: "Plant Added!",
+        description: `${newPlant.name || 'Your new plant'} has been successfully added.`,
         variant: "default",
       });
       onAddPlant(newPlant); // Call prop with the newly created plant
@@ -91,6 +69,16 @@ export function AddPlantModal({ isOpen, onClose, onAddPlant }: AddPlantModalProp
     }
   };
 
+  // Use FieldErrors<AddPlantFormData> for more specific error typing if needed
+  const onInvalid = (errors: FieldErrors<AddPlantFormData>) => {
+    console.error("Form validation errors:", errors); // Optional: for debugging
+    toast({
+      title: "Validation Error",
+      description: "Please fill in all required fields correctly.",
+      variant: "destructive",
+    });
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -104,7 +92,7 @@ export function AddPlantModal({ isOpen, onClose, onAddPlant }: AddPlantModalProp
         </DialogHeader>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
             <FormField
               control={form.control}
               name="name"
@@ -153,67 +141,18 @@ export function AddPlantModal({ isOpen, onClose, onAddPlant }: AddPlantModalProp
               )}
             />
             
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="waterFrequencyDays"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Watering Frequency (days)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        min={1} 
-                        {...field} 
-                        value={field.value ?? ""} // Ensure value is not null
-                        onChange={(e) => field.onChange(e.target.value === '' ? null : e.target.valueAsNumber)}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="lightRequirement"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Light Requirement</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value ?? ""} // Ensure value is not null
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select light level" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
             <FormField
               control={form.control}
-              name="description"
+              name="acquiredDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <FormLabel>Acquired Date</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      placeholder="Add notes about your plant..." 
-                      className="resize-none" 
-                      rows={3}
-                      {...field} 
-                      value={field.value ?? ""} // Ensure value is not null
+                    <Input 
+                        type="date" 
+                        {...field} 
+                        value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : field.value ?? ""}
+                        onChange={e => field.onChange(e.target.valueAsDate)} 
                     />
                   </FormControl>
                   <FormMessage />
@@ -221,19 +160,11 @@ export function AddPlantModal({ isOpen, onClose, onAddPlant }: AddPlantModalProp
               )}
             />
             
-            <div className="flex justify-end space-x-4 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={onClose}
-              >
+            <div className="flex justify-end pt-4">
+              <Button type="button" variant="outline" onClick={onClose} className="mr-2">
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                className="bg-primary hover:bg-primary-light text-white"
-                disabled={isSubmitting}
-              >
+              <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? "Adding..." : "Add Plant"}
               </Button>
             </div>

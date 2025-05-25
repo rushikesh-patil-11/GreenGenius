@@ -8,7 +8,8 @@ import {
   insertCareTaskSchema,
   insertCareHistorySchema,
   insertRecommendationSchema,
-  insertPlantHealthMetricsSchema
+  insertPlantHealthMetricsSchema,
+  InsertPlant
 } from "@shared/schema";
 import { ZodError } from "zod";
 import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
@@ -140,21 +141,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/plants', ClerkExpressRequireAuth(), async (req: any, res) => {
+    console.log(`[routes.ts] POST /api/plants - Route handler started. Storage type from import: ${storage.constructor.name}`); // Log storage type
     try {
       if (!req.auth || !req.auth.userId) {
         return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
       }
       const clerkId = req.auth.userId; // This is the Clerk User ID
 
-      // Extract basic plant data from request body (userId is no longer needed from body)
-      const { name, species, imageUrl, description, waterFrequencyDays, lightRequirement, status, lastWatered } = req.body;
-      
-      // Basic validation for required fields
-      if (!name) {
-        return res.status(400).json({ 
-          error: 'Missing required fields', 
-          details: 'name is a required field' 
-        });
+      // Validate request body using Zod schema (omitting userId as it's derived from auth)
+      const { data: validatedBody, error: validationError } = validateBody(
+        insertPlantSchema.omit({ userId: true }),
+        req.body
+      );
+
+      if (validationError) {
+        return res.status(400).json({ error: 'Invalid plant data', details: validationError });
       }
 
       // Fetch user details from Clerk
@@ -163,6 +164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'User not found in Clerk' });
       }
 
+      console.log(`[routes.ts] POST /api/plants - Calling storage.getOrCreateUserByClerkId for clerkId: ${clerkId}`);
       // Get or create user in local database
       const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
         email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '', // Primary email
@@ -170,47 +172,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: clerkUser.firstName,
         lastName: clerkUser.lastName,
       });
+      console.log(`[routes.ts] POST /api/plants - appUser from storage: ${JSON.stringify(appUser)}`);
 
-      if (!appUser || !appUser.id) {
-        return res.status(500).json({ error: 'Failed to get or create local user record' });
+
+      if (!appUser || typeof appUser.id !== 'number' || appUser.id <= 0) { // More robust check for valid ID
+        console.error(`[routes.ts] POST /api/plants - Invalid appUser or appUser.id: ${appUser?.id}`);
+        return res.status(500).json({ error: 'Failed to get or create a valid local user record' });
       }
       
-      // Construct the plant data with properly parsed fields
-      const plantData = {
-        userId: appUser.id, // Use the internal database ID
-        name,
-        species: species || null,
-        imageUrl: imageUrl || null,
-        description: description || null,
-        waterFrequencyDays: waterFrequencyDays ? Number(waterFrequencyDays) : null,
-        lightRequirement: lightRequirement || null,
-        status: status || 'healthy',
-        lastWatered: lastWatered ? new Date(lastWatered) : new Date()
+      // Construct the plant data for database insertion
+      const plantDataForDb: InsertPlant = {
+        name: validatedBody.name!, // name is required by schema, so validatedBody.name is string
+        userId: appUser.id,        // from appUser
+        species: validatedBody.species,          // string | undefined from Zod schema
+        imageUrl: validatedBody.imageUrl,        // string | undefined from Zod schema
+        acquiredDate: validatedBody.acquiredDate,  // Date | undefined from Zod schema
+        status: validatedBody.status,            // string | undefined from Zod schema
+        // lastWatered is Date | undefined from Zod schema, default to new Date() if undefined
+        lastWatered: validatedBody.lastWatered === undefined ? new Date() : validatedBody.lastWatered,
       };
+      console.log(`[routes.ts] POST /api/plants - Plant data for DB (plantDataForDb): ${JSON.stringify(plantDataForDb)}`);
 
-      const plant = await storage.createPlant(plantData);
+      console.log(`[routes.ts] POST /api/plants - About to call storage.createPlant. Storage type: ${storage.constructor.name}`);
+      const plant = await storage.createPlant(plantDataForDb);
+      console.log(`[routes.ts] POST /api/plants - Plant object received from storage.createPlant: ${JSON.stringify(plant)}`);
+      
       return res.status(201).json(plant);
     } catch (error) {
-      console.error('Error creating plant:', error);
+      console.error('[routes.ts] POST /api/plants - Error creating plant:', error); // Ensure this logs the error object
       return handleError(res, error);
     }
   });
 
-  app.put('/api/plants/:id', async (req, res) => {
+  app.put('/api/plants/:id', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
       const plantId = parseInt(req.params.id);
       if (isNaN(plantId)) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
-      const { data, error } = validateBody(insertPlantSchema, req.body);
-      if (error) {
-        return res.status(400).json({ error: 'Invalid plant data', details: error });
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for plant update' });
+      }
+      // We might need to verify that this plant belongs to the authenticated user
+      // This requires fetching the plant first, then checking its userId against appUser.id
+
+      // Validate request body using Zod schema for partial updates
+      // userId should not be updatable through this route.
+      const { data: validatedBody, error: validationError } = validateBody(
+        insertPlantSchema.partial().omit({ userId: true }),
+        req.body
+      );
+
+      if (validationError) {
+        return res.status(400).json({ error: 'Invalid plant data for update', details: validationError });
       }
 
-      const updatedPlant = await storage.updatePlant(plantId, data);
+      if (Object.keys(validatedBody).length === 0) {
+        return res.status(400).json({ error: 'No fields provided for update' });
+      }
+
+      // Construct the data for storage.updatePlant
+      // validatedBody contains fields that are present and valid according to the partial schema.
+      // Date fields (acquiredDate, lastWatered) will be Date | undefined.
+      const updateData: Partial<InsertPlant> = {
+        ...validatedBody,
+        // acquiredDate and lastWatered from validatedBody are already Date | undefined
+        // If they were in req.body and valid, Zod coerced them. If not, they are undefined.
+      };
+
+      const updatedPlant = await storage.updatePlant(plantId, updateData);
       if (!updatedPlant) {
-        return res.status(404).json({ error: 'Plant not found' });
+        return res.status(404).json({ error: 'Plant not found or update failed' });
       }
 
       return res.json(updatedPlant);
@@ -232,6 +265,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       return res.json({ success: true });
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+  app.get('/api/plants/:id/health', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      // Ensure the authenticated user has access to this plant's health metrics
+      // This typically involves checking if the plant belongs to the user.
+      // For now, we assume storage.getPlantHealthMetrics handles this or it's public.
+      // If not, you'd fetch the plant, check its userId against req.auth.userId (after getting appUser.id)
+
+      const healthMetrics = await storage.getPlantHealthMetrics(plantId);
+      if (!healthMetrics) {
+        return res.status(404).json({ error: 'Plant health metrics not found' });
+      }
+
+      return res.json(healthMetrics);
     } catch (error) {
       return handleError(res, error);
     }
@@ -398,10 +454,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (task.taskType === 'water') {
         const plant = await storage.getPlantById(task.plantId);
         if (plant) {
-          await storage.updatePlant(plant.id, {
-            ...plant,
-            lastWatered: new Date()
-          });
+          const {
+            acquiredDate,
+            lastWatered,
+            ...restOfPlantProperties
+          } = plant;
+
+          // Prepare the update payload with converted dates
+          const updatePayload = {
+            ...restOfPlantProperties,
+            acquiredDate: acquiredDate === null ? undefined : acquiredDate,
+            lastWatered: new Date(), // Update to current time when watering task is done
+          };
+
+          await storage.updatePlant(plant.id, updatePayload);
           
           // Add to care history
           await storage.createCareHistory({
@@ -531,22 +597,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const recommendation = await storage.applyRecommendation(recId);
       if (!recommendation) {
         return res.status(404).json({ error: 'Recommendation not found' });
-      }
-
-      // If it's a watering recommendation, adjust the plant's watering frequency
-      if (recommendation.recommendationType === 'water' && recommendation.plantId) {
-        const plant = await storage.getPlantById(recommendation.plantId);
-        if (plant && plant.waterFrequencyDays) {
-          // Extract the suggested days from the recommendation message
-          const daysMatch = recommendation.message.match(/(\d+)\s*days/);
-          if (daysMatch && daysMatch[1]) {
-            const suggestedDays = parseInt(daysMatch[1]);
-            await storage.updatePlant(plant.id, {
-              ...plant,
-              waterFrequencyDays: suggestedDays
-            });
-          }
-        }
       }
 
       return res.json(recommendation);

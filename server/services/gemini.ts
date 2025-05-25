@@ -5,19 +5,7 @@ const apiKey = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey!);
 const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-export interface PlantData {
-  name: string;
-  species: string | null;
-  waterFrequencyDays: number | null;
-  lightRequirement: string | null;
-  lastWatered: Date | null;
-}
-
-export interface EnvironmentData {
-  temperature: number | null;
-  humidity: number | null;
-  lightLevel: string | null;
-}
+import type { PlantData, EnvironmentData } from "../../shared/schema";
 
 /**
  * Generate plant care recommendations using Google's Gemini AI

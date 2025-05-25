@@ -9,10 +9,14 @@ import {
   insertCareHistorySchema,
   insertRecommendationSchema,
   insertPlantHealthMetricsSchema,
-  InsertPlant
+  InsertPlant,
+  PlantData, // Now imported from shared schema
+  EnvironmentData // Now imported from shared schema
 } from "@shared/schema";
 import { ZodError } from "zod";
 import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
+import { generatePlantRecommendations } from "./services/gemini"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
+import fetch from 'node-fetch'; // Or your preferred HTTP client
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to validate request body
@@ -84,6 +88,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Weather route
+  app.get('/api/weather', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      // TODO: Get latitude and longitude from user's profile or request
+      // Default location set to Nandurbar, India
+      const latitude = 21.37;
+      const longitude = 74.25;
+
+      const weatherResponse = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,soil_moisture_0_to_10cm&hourly=temperature_2m,relative_humidity_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,precipitation_probability_max&timezone=auto`);
+      if (!weatherResponse.ok) {
+        throw new Error(`Error fetching weather data: ${weatherResponse.statusText}`);
+      }
+      const weatherData = await weatherResponse.json();
+      return res.json(weatherData);
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
   // Plants routes
   app.get('/api/plants', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
@@ -134,7 +157,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'Plant not found' });
       }
 
-      return res.json(plant);
+      // Fetch recommendations for the plant
+      const recommendations = await storage.getRecommendationsByPlantId(plantId);
+      
+      // Combine plant details with recommendations
+      const plantWithRecommendations = {
+        ...plant,
+        recommendations: recommendations || [] // Ensure recommendations is an array
+      };
+
+      return res.json(plantWithRecommendations);
+    } catch (error) {
+      return handleError(res, error);
+    }
+  });
+
+  // New route for plant recommendations
+  app.post('/api/plants/:id/recommendations', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+
+      const plantId = parseInt(req.params.id);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Valid plant ID is required' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found' });
+      }
+
+      // TODO: Later, fetch real environment data. For now, using placeholders or request body.
+      // const environment: EnvironmentData = req.body.environment; // Assuming environment data is sent in request
+      // For now, let's use some defaults or expect it in the body
+      const environment: EnvironmentData = req.body.environment || {
+        temperature: 22, // Example default
+        humidity: 50,    // Example default
+        lightLevel: "medium" // Example default
+      };
+
+      const plantData: PlantData = {
+        name: plant.name,
+        species: plant.species || null,
+        // These might not be directly on the plant object, adjust as per your Plant model in schema.ts
+        // For now, using null or defaults. You'll need to fetch/calculate these.
+        waterFrequencyDays: null, // Example: plant.waterFrequencyDays or calculate
+        lightRequirement: null, // Example: plant.lightRequirement
+        lastWatered: plant.lastWatered ? new Date(plant.lastWatered) : null,
+      };
+
+      const recommendations = await generatePlantRecommendations(plantData, environment);
+      return res.json(recommendations);
+
     } catch (error) {
       return handleError(res, error);
     }
@@ -196,6 +272,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[routes.ts] POST /api/plants - About to call storage.createPlant. Storage type: ${storage.constructor.name}`);
       const plant = await storage.createPlant(plantDataForDb);
       console.log(`[routes.ts] POST /api/plants - Plant object received from storage.createPlant: ${JSON.stringify(plant)}`);
+
+      // Generate and store recommendations for the new plant
+      if (plant && plant.id) {
+        const environmentForNewPlant: EnvironmentData = {
+          temperature: 22, // Example default, consider fetching or allowing user input
+          humidity: 50,    // Example default
+          lightLevel: "medium" // Example default
+        };
+        const plantDataForGemini: PlantData = {
+          name: plant.name,
+          species: plant.species || null,
+          waterFrequencyDays: plant.waterFrequencyDays || null,
+          lightRequirement: null, // This might need to be derived or set
+          lastWatered: plant.lastWatered ? new Date(plant.lastWatered) : null,
+        };
+
+        try {
+          const recommendations = await generatePlantRecommendations(plantDataForGemini, environmentForNewPlant);
+          if (recommendations && recommendations.length > 0 && appUser && appUser.id) {
+            for (const rec of recommendations) {
+              await storage.createRecommendation({
+                userId: appUser.id, // Use appUser.id from the authenticated user
+                plantId: plant.id,
+                recommendationType: rec.recommendationType,
+                message: rec.message,
+              });
+            }
+            console.log(`[routes.ts] POST /api/plants - Successfully generated and stored ${recommendations.length} recommendations for plant ID: ${plant.id}`);
+          } else {
+            console.log(`[routes.ts] POST /api/plants - No recommendations generated or appUser.id missing for plant ID: ${plant.id}`);
+          }
+        } catch (recError) {
+          console.error(`[routes.ts] POST /api/plants - Error generating or storing recommendations for plant ID: ${plant.id}:`, recError);
+          // Decide if this error should affect the response. For now, we'll log it and continue.
+        }
+      }
       
       return res.status(201).json(plant);
     } catch (error) {

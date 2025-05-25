@@ -108,6 +108,7 @@ export interface IStorage {
 
   // Recommendations operations
   getRecommendationsByUserId(userId: number): Promise<Recommendation[]>;
+  getRecommendationsByPlantId(plantId: number): Promise<Recommendation[]>; // Added this line
   createRecommendation(recommendation: InsertRecommendation): Promise<Recommendation>;
   applyRecommendation(id: number): Promise<Recommendation | undefined>;
   generateRecommendations(userId: number): Promise<void>;
@@ -470,6 +471,21 @@ export class DbStorage implements IStorage {
       applied: newRecommendation.applied ?? false, // applied will be false from insert
       createdAt: newRecommendation.createdAt ? new Date(newRecommendation.createdAt) : new Date(),
     } as Recommendation;
+  }
+
+  async getRecommendationsByPlantId(plantId: number): Promise<Recommendation[]> {
+    console.log(`[DbStorage] Fetching recommendations for plantId: ${plantId}`);
+    const result = await this.db.query.recommendations.findMany({
+      where: eq(schema.recommendations.plantId, plantId),
+      orderBy: [desc(schema.recommendations.createdAt)], // Optional: order by creation date
+    });
+    console.log(`[DbStorage] Found ${result.length} recommendations for plantId: ${plantId}`);
+    return result.map(rec => ({
+        ...rec,
+        plantId: rec.plantId ?? null, // Ensure plantId is handled (though it should always exist here)
+        applied: rec.applied ?? false, // Ensure applied is boolean
+        createdAt: rec.createdAt ? new Date(rec.createdAt) : new Date(), // Ensure createdAt is a Date
+    })) as Recommendation[];
   }
 
   async applyRecommendation(id: number): Promise<Recommendation | undefined> {

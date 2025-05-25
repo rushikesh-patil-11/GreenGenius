@@ -145,3 +145,19 @@ export type InsertCareHistory = z.infer<typeof insertCareHistorySchema>;
 
 export type PlantHealthMetric = typeof plantHealthMetrics.$inferSelect;
 export type InsertPlantHealthMetric = z.infer<typeof insertPlantHealthMetricsSchema>;
+
+// Interface for plant data used by Gemini service
+export interface PlantData {
+  name: string;
+  species: string | null;
+  waterFrequencyDays: number | null;
+  lightRequirement: string | null;
+  lastWatered: Date | null;
+}
+
+// Interface for environment data used by Gemini service
+export interface EnvironmentData {
+  temperature: number | null;
+  humidity: number | null;
+  lightLevel: string | null;
+}

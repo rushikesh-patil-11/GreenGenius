@@ -4,18 +4,35 @@ import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 
 export function useEnvironment(options?: { enabled?: boolean }) {
-  const {
-    data: environmentData,
-    isLoading: isEnvironmentLoading,
-    error: environmentError,
-  } = useQuery<EnvironmentReading>({
+  const { data: environmentData, isLoading: isEnvironmentLoading, error: environmentError } = useQuery<EnvironmentReading>({
     queryKey: ['/api/environment'],
     queryFn: async () => {
-      const response = await fetch(`/api/environment`);
-      if (!response.ok) {
+      const [environmentResponse, weatherResponse] = await Promise.all([
+        fetch(`/api/environment`),
+        fetch(`/api/weather`)
+      ]);
+
+      if (!environmentResponse.ok) {
         throw new Error('Failed to fetch environment data');
       }
-      return response.json();
+      if (!weatherResponse.ok) {
+        // Log the error but don't block the environment data from loading
+        console.error('Failed to fetch weather data:', weatherResponse.statusText);
+        // Return just the environment data if weather fetching fails
+        return environmentResponse.json();
+      }
+
+      const environment = await environmentResponse.json();
+      const weather = await weatherResponse.json();
+
+      // Combine environment data with weather data, prioritizing existing environment data
+      return {
+        ...environment,
+        temperature: environment.temperature ?? weather.current.temperature_2m,
+        humidity: environment.humidity ?? weather.current.relative_humidity_2m,
+        // Note: Light level is not directly available from Open-Meteo, keep existing or set to null/default
+        lightLevel: environment.lightLevel ?? null, // Or a default like 'unknown'
+      };
     },
     enabled: options?.enabled,
   });

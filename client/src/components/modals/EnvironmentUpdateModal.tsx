@@ -1,16 +1,11 @@
-import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { insertEnvironmentReadingSchema, type EnvironmentReading as SharedEnvironmentReading } from "@shared/schema";
-import { z } from "zod";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { Label } from "@/components/ui/label";
+import type { EnvironmentReading as SharedEnvironmentReading } from "@shared/schema";
+import { useEnvironment } from "@/hooks/useEnvironment";
+import { useToast } from "@/components/ui/use-toast";
 
 interface EnvironmentUpdateModalProps {
   isOpen: boolean;
@@ -19,174 +14,95 @@ interface EnvironmentUpdateModalProps {
   onUpdate: () => void;
 }
 
-const baseFormSchema = insertEnvironmentReadingSchema.omit({ userId: true });
+export function EnvironmentUpdateModal({ isOpen, onClose, currentEnvironment, onUpdate }: EnvironmentUpdateModalProps) {
+  const [temperature, setTemperature] = useState<string>('');
+  const [humidity, setHumidity] = useState<string>('');
+  const [soilMoisture, setSoilMoisture] = useState<string>(''); // New state for soil moisture
 
-const formSchema = baseFormSchema.extend({
-  temperature: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)),
-    z.number().min(0, "Temperature must be a positive number").optional()
-  ),
-  humidity: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)),
-    z.number().min(0, "Humidity must be a positive number").max(100, "Humidity cannot exceed 100%").optional()
-  ),
-  lightLevel: z.enum(["low", "medium", "high"]).optional(),
-});
+  const { updateEnvironment: updateEnvironmentMutation } = useEnvironment();
 
-export function EnvironmentUpdateModal({ 
-  isOpen, 
-  onClose, 
-  currentEnvironment,
-  onUpdate 
-}: EnvironmentUpdateModalProps) {
-  const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  useEffect(() => {
+    if (currentEnvironment) {
+      setTemperature(currentEnvironment.temperature?.toString() || '');
+      setHumidity(currentEnvironment.humidity?.toString() || '');
+      setSoilMoisture(''); // Initialize soil moisture state as empty string since it's not in the type
+    } else {
+      setTemperature('');
+      setHumidity('');
+      setSoilMoisture(''); // Clear soil moisture state
+    }
+  }, [currentEnvironment]);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      temperature: currentEnvironment?.temperature ?? undefined,
-      humidity: currentEnvironment?.humidity ?? undefined,
-      lightLevel: currentEnvironment?.lightLevel as ("low" | "medium" | "high" | undefined),
-    },
-  });
+  const handleSubmit = async () => {
+    const updatedData: Partial<SharedEnvironmentReading> = {};
+    if (temperature !== '') updatedData.temperature = parseFloat(temperature);
+    if (humidity !== '') updatedData.humidity = parseFloat(humidity);
+    if (soilMoisture !== '') updatedData.soil_moisture_0_to_10cm = parseFloat(soilMoisture); // Include soil moisture in update data
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    setIsSubmitting(true);
-    
     try {
-      await apiRequest("POST", "/api/environment", values);
-      
-      toast({
-        title: "Success",
-        description: "Environment readings updated successfully.",
-        variant: "default",
-      });
-      
-      queryClient.invalidateQueries({ queryKey: ['/api/environment'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/recommendations'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/dashboard-stats'] });
-      
+      await updateEnvironmentMutation.mutateAsync(updatedData);
+      toast.success("Environment readings updated successfully!");
       onUpdate();
       onClose();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update environment readings. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
+      console.error("Failed to update environment readings:", error);
+      toast.error("Failed to update environment readings.");
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold font-poppins">Update Environment Readings</DialogTitle>
-          <DialogDescription>
-            Enter the current environmental conditions around your plants
-          </DialogDescription>
+          <DialogTitle>Update Environment Readings</DialogTitle>
         </DialogHeader>
-        
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="temperature"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Temperature (°C)</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number" 
-                      placeholder="e.g. 22" 
-                      {...field} 
-                      onChange={(e) => field.onChange(e.target.value === "" ? "" : parseFloat(e.target.value))}
-                      value={field.value === undefined ? "" : field.value}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Current room temperature in Celsius
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="temperature" className="text-right">
+              Temperature (°C)
+            </Label>
+            <Input
+              id="temperature"
+              value={temperature}
+              onChange={(e) => setTemperature(e.target.value)}
+              className="col-span-3"
+              type="number"
+              step="0.1"
             />
-            
-            <FormField
-              control={form.control}
-              name="humidity"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Humidity (%)</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number" 
-                      placeholder="e.g. 45" 
-                      min={0}
-                      max={100}
-                      {...field} 
-                      onChange={(e) => field.onChange(e.target.value === "" ? "" : parseFloat(e.target.value))}
-                      value={field.value === undefined ? "" : field.value}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Current room humidity percentage
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="humidity" className="text-right">
+              Humidity (%)
+            </Label>
+            <Input
+              id="humidity"
+              value={humidity}
+              onChange={(e) => setHumidity(e.target.value)}
+              className="col-span-3"
+              type="number"
+              step="0.1"
             />
-            
-            <FormField
-              control={form.control}
-              name="lightLevel"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Light Level</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select light level" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    Amount of natural light in your plant's environment
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
+          </div>
+          {/* Soil Moisture Input Field */}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="soilMoisture" className="text-right">
+              Soil Moisture (m³/m³)
+            </Label>
+            <Input
+              id="soilMoisture"
+              value={soilMoisture}
+              onChange={(e) => setSoilMoisture(e.target.value)}
+              className="col-span-3"
+              type="number"
+              step="0.01"
             />
-            
-            <div className="flex justify-end space-x-4 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={onClose}
-              >
-                Cancel
-              </Button>
-              <Button 
-                type="submit" 
-                className="bg-primary hover:bg-primary-light text-white"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Updating..." : "Update Readings"}
-              </Button>
-            </div>
-          </form>
-        </Form>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" onClick={handleSubmit} disabled={updateEnvironmentMutation.isLoading}>
+            {updateEnvironmentMutation.isLoading ? 'Updating...' : 'Save changes'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

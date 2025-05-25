@@ -66,7 +66,7 @@ export function getHealthStatus(healthPercentage: number): { status: string; col
   }
 }
 
-export function getEnvironmentStatus(value: number, metric: 'temperature' | 'humidity'): { status: string; color: string } {
+export function getEnvironmentStatus(value: number, metric: 'temperature' | 'humidity' | 'soil_moisture'): { status: string; color: string } {
   if (metric === 'temperature') {
     if (value >= 18 && value <= 24) {
       return { status: 'Optimal', color: 'text-success' };
@@ -75,7 +75,7 @@ export function getEnvironmentStatus(value: number, metric: 'temperature' | 'hum
     } else {
       return { status: 'Concern', color: 'text-destructive' };
     }
-  } else { // humidity
+  } else if (metric === 'humidity') {
     if (value >= 40 && value <= 60) {
       return { status: 'Optimal', color: 'text-success' };
     } else if ((value >= 30 && value < 40) || (value > 60 && value <= 70)) {
@@ -83,7 +83,17 @@ export function getEnvironmentStatus(value: number, metric: 'temperature' | 'hum
     } else {
       return { status: value < 40 ? 'Low' : 'High', color: 'text-destructive' };
     }
+  } else if (metric === 'soil_moisture') {
+    if (value >= 0.25 && value <= 0.35) {
+      return { status: 'Optimal', color: 'text-success' };
+    } else if ((value >= 0.15 && value < 0.25) || (value > 0.35 && value <= 0.45)) {
+      return { status: 'Acceptable', color: 'text-warning' };
+    } else {
+      return { status: value < 0.15 ? 'Low' : 'High', color: 'text-destructive' };
+    }
   }
+  // Should not happen with TS checking, but as a fallback
+  return { status: 'Unknown', color: 'text-muted-foreground' };
 }
 
 export function getLightLevelInfo(level: string): { label: string; status: string; color: string } {

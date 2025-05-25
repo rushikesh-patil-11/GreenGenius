@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCareSchedule } from "@/hooks/useCareSchedule";
 import { Droplet, Scissors, Check, X } from "lucide-react";
 import { formatRelativeDate, formatDate } from "@/lib/utils";
-import { usePlants } from "@/hooks/usePlants";
 import { useToast } from "@/hooks/use-toast";
 
 export default function CareSchedulePage() {
@@ -16,9 +15,7 @@ export default function CareSchedulePage() {
   const [filter, setFilter] = useState("all");
   const { toast } = useToast();
   
-  const { tasks, isLoading, completeTask, skipTask } = useCareSchedule(userId);
-  const { plants, isLoading: isPlantsLoading } = usePlants(userId);
-  
+  const { tasks, isLoading, completeTask, skipTask } = useCareSchedule({ enabled: true });
   const [processingTasks, setProcessingTasks] = useState<number[]>([]);
   
   // Filter tasks
@@ -40,12 +37,6 @@ export default function CareSchedulePage() {
     }
     return true;
   });
-  
-  // Get plant name by ID
-  const getPlantName = (plantId: number) => {
-    const plant = plants.find(p => p.id === plantId);
-    return plant ? plant.name : 'Unknown Plant';
-  };
   
   const handleCompleteTask = async (taskId: number) => {
     setProcessingTasks(prev => [...prev, taskId]);
@@ -132,7 +123,7 @@ export default function CareSchedulePage() {
           {/* Care Tasks */}
           <Card className="bg-white dark:bg-card shadow-natural">
             <CardContent className="p-6">
-              {isLoading || isPlantsLoading ? (
+              {isLoading ? (
                 <div className="space-y-4">
                   {[...Array(5)].map((_, i) => (
                     <div key={i} className="flex items-center p-3 border border-gray-100 dark:border-gray-800 rounded-lg animate-pulse">
@@ -186,7 +177,7 @@ export default function CareSchedulePage() {
                       <div className="flex-1">
                         <h4 className="font-poppins font-medium text-textColor dark:text-foreground text-lg">
                           {task.taskType === 'water' ? 'Water ' : 'Prune '}
-                          {getPlantName(task.plantId)}
+                          {task.plantName || 'Unknown Plant'}
                         </h4>
                         <div className="flex items-center mt-1">
                           <span className="text-muted-foreground text-sm">
@@ -194,7 +185,7 @@ export default function CareSchedulePage() {
                           </span>
                           <span className="mx-2 text-muted-foreground">•</span>
                           <span className="text-muted-foreground text-sm">
-                            {formatDate(task.dueDate)}
+                            {task.dueDate ? formatDate(task.dueDate) : 'N/A'}
                           </span>
                         </div>
                       </div>

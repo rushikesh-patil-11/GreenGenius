@@ -18,6 +18,7 @@ export function EnvironmentUpdateModal({ isOpen, onClose, currentEnvironment, on
   const [temperature, setTemperature] = useState<string>('');
   const [humidity, setHumidity] = useState<string>('');
   const [soilMoisture, setSoilMoisture] = useState<string>(''); // New state for soil moisture
+  const { toast } = useToast(); // Initialize toast
 
   const { updateEnvironment: updateEnvironmentMutation } = useEnvironment();
 
@@ -41,12 +42,12 @@ export function EnvironmentUpdateModal({ isOpen, onClose, currentEnvironment, on
 
     try {
       await updateEnvironmentMutation.mutateAsync(updatedData);
-      toast.success("Environment readings updated successfully!");
+      toast({ title: "Success", description: "Environment readings updated successfully!" });
       onUpdate();
       onClose();
     } catch (error) {
       console.error("Failed to update environment readings:", error);
-      toast.error("Failed to update environment readings.");
+      toast({ variant: "destructive", title: "Error", description: "Failed to update environment readings." });
     }
   };
 
@@ -99,14 +100,13 @@ export function EnvironmentUpdateModal({ isOpen, onClose, currentEnvironment, on
             </div> */}
           </div>
           <DialogFooter>
-            <Button type="button" onClick={handleSubmit} disabled={updateEnvironmentMutation.isLoading}>
-              {updateEnvironmentMutation.isLoading ? 'Updating...' : 'Save changes'}
+            <Button type="button" onClick={handleSubmit} disabled={updateEnvironmentMutation.isPending}>
+              {updateEnvironmentMutation.isPending ? 'Updating...' : 'Save changes'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     );
-  };
 }
 
 export default EnvironmentUpdateModal;

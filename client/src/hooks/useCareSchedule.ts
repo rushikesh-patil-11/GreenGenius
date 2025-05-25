@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { CareTask } from "@shared/schema";
+import { CareTask, EnrichedCareTask } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 
@@ -8,7 +8,7 @@ export function useCareSchedule(options?: { enabled?: boolean }) {
     data: tasks = [],
     isLoading,
     error,
-  } = useQuery<CareTask[]>({
+  } = useQuery<EnrichedCareTask[]>({
     queryKey: ['/api/care-tasks'],
     queryFn: async () => {
       const response = await fetch(`/api/care-tasks`);

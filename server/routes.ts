@@ -18,6 +18,34 @@ import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
 import { generatePlantRecommendations, generateAiCareTips } from "./services/gemini"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
 import fetch from 'node-fetch'; // Or your preferred HTTP client
 
+// Interfaces for Open-Meteo API response
+interface OpenMeteoCurrentWeather {
+  temperature_2m: number | null;
+  relative_humidity_2m: number | null;
+  precipitation: number | null;
+  weather_code: number | null;
+  // Add other fields if they are used or might be useful
+}
+
+interface OpenMeteoResponse {
+  latitude: number;
+  longitude: number;
+  generationtime_ms: number;
+  utc_offset_seconds: number;
+  timezone: string;
+  timezone_abbreviation: string;
+  elevation: number;
+  current_units?: { // Make current_units optional as it might not always be present
+    time: string;
+    interval: string;
+    temperature_2m: string;
+    relative_humidity_2m: string;
+    precipitation: string;
+    weather_code: string;
+  };
+  current?: OpenMeteoCurrentWeather; // Make current optional
+}
+
 // Helper function to determine season
 function getSeason(date: Date): string {
   const month = date.getMonth(); // 0 (Jan) to 11 (Dec)
@@ -102,22 +130,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -179,22 +212,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -252,22 +290,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -344,22 +387,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -425,22 +473,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -477,17 +530,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lightLevel: "medium" // Example default
       };
 
-      const plantData: PlantData = {
+      const plantForAi: PlantData = {
         name: plant.name,
-        species: plant.species || null,
-        // These might not be directly on the plant object, adjust as per your Plant model in schema.ts
-        // For now, using null or defaults. You'll need to fetch/calculate these.
-        waterFrequencyDays: null, // Example: plant.waterFrequencyDays or calculate
-        lightRequirement: null, // Example: plant.lightRequirement
-        lastWatered: plant.lastWatered ? new Date(plant.lastWatered) : null,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
       };
 
-      const recommendations = await generatePlantRecommendations(plantData, environment);
+      const recommendations = await generatePlantRecommendations(plantForAi, environment);
       return res.json(recommendations);
 
     } catch (error) {
@@ -523,22 +575,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -576,7 +633,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`[routes.ts] POST /api/plants - Calling storage.getOrCreateUserByClerkId for clerkId: ${clerkId}`);
       // Get or create user in local database
       const appUser = await storage.getOrCreateUserByClerkId(clerkId, {
-        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '', // Primary email
+        email: clerkUser.emailAddresses.find(e => e.id === clerkUser.primaryEmailAddressId)?.emailAddress || '',
         username: clerkUser.username,
         firstName: clerkUser.firstName,
         lastName: clerkUser.lastName,
@@ -613,16 +670,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           humidity: 50,    // Example default
           lightLevel: "medium" // Example default
         };
-        const plantDataForGemini: PlantData = {
+        const plantForAi: PlantData = {
           name: plant.name,
-          species: plant.species || null,
-          waterFrequencyDays: plant.waterFrequencyDays || null,
-          lightRequirement: null, // This might need to be derived or set
-          lastWatered: plant.lastWatered ? new Date(plant.lastWatered) : null,
+          species: plant.species,
+          waterFrequencyDays: plant.waterFrequencyDays,
+          // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+          lightRequirement: (plant as any).lightRequirement ?? null,
+          lastWatered: plant.lastWatered,
         };
 
         try {
-          const recommendations = await generatePlantRecommendations(plantDataForGemini, environmentForNewPlant);
+          const recommendations = await generatePlantRecommendations(plantForAi, environmentForNewPlant);
           if (recommendations && recommendations.length > 0 && appUser && appUser.id) {
             for (const rec of recommendations) {
               await storage.createRecommendation({
@@ -677,22 +735,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -779,22 +842,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -851,22 +919,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -928,22 +1001,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1013,22 +1091,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1108,22 +1191,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1193,22 +1281,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1280,22 +1373,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1392,22 +1490,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1472,22 +1575,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1557,22 +1665,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1654,22 +1767,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1726,22 +1844,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1799,22 +1922,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1887,22 +2015,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 
@@ -1960,22 +2093,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json();
+      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
       const currentWeatherData: EnvironmentData = {
-        temperature: weatherData.current?.temperature_2m,
-        humidity: weatherData.current?.relative_humidity_2m,
-        precipitation: weatherData.current?.precipitation, // Assuming this is daily precipitation sum
-        // Map weather_code to a textual description if possible, or pass code directly
-        // For simplicity, we'll pass undefined if not directly available or easily mapped
-        weather_description: weatherData.current?.weather_code?.toString(), // Example, needs mapping
-        // lightLevel is not directly from this weather API for 'current', might need another source or estimation
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // TODO: Map weatherData.current?.weather_code to a textual description
+        // precipitation: weatherData.current?.precipitation, // Removed as not in EnvironmentData
       };
 
       const currentDate = new Date();
       const season = getSeason(currentDate);
       const plantType = plant.species || plant.name; // Use species if available, otherwise name
 
-      const aiTips = await generateAiCareTips(plant, currentWeatherData, season, plantType);
+      const plantForAi: PlantData = {
+        name: plant.name,
+        species: plant.species,
+        waterFrequencyDays: plant.waterFrequencyDays,
+        // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
+        lightRequirement: (plant as any).lightRequirement ?? null,
+        lastWatered: plant.lastWatered,
+      };
+      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
 
       return res.json(aiTips);
 

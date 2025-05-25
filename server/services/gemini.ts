@@ -23,13 +23,12 @@ Plant Information:
 - Name: ${plant.name}
 - Species: ${plant.species || 'Unknown'}
 - Current watering frequency: ${plant.waterFrequencyDays ? `Every ${plant.waterFrequencyDays} days` : 'Unknown'}
-- Light requirement: ${plant.lightRequirement || 'Unknown'}
 - Last watered: ${plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString() : 'Unknown'}
 
 Current Environment:
 - Temperature: ${environment.temperature ? `${environment.temperature}°C` : 'Unknown'}
 - Humidity: ${environment.humidity ? `${environment.humidity}%` : 'Unknown'}
-- Light level: ${environment.lightLevel || 'Unknown'}
+- Soil Moisture (0-10cm): ${environment.soil_moisture_0_to_10cm !== null && environment.soil_moisture_0_to_10cm !== undefined ? `${environment.soil_moisture_0_to_10cm} m³/m³` : 'Unknown'}
 
 Please provide 1-2 actionable recommendations for this plant focusing only on watering or light adjustments.
 For each recommendation, clearly specify:
@@ -85,14 +84,12 @@ Plant Information:
 - Name: ${plant.name}
 - Species/Type: ${plantType}
 - Current watering frequency: ${plant.waterFrequencyDays ? `Every ${plant.waterFrequencyDays} days` : 'Unknown'}
-- Light requirement: ${plant.lightRequirement || 'Unknown'}
 - Last watered: ${plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString() : 'Unknown'}
 
 Weather Conditions:
-- Temperature: ${weather.temperature !== undefined ? `${weather.temperature}°C` : 'Not available'}
-- Humidity: ${weather.humidity !== undefined ? `${weather.humidity}%` : 'Not available'}
-- Precipitation today: ${weather.precipitation !== undefined ? `${weather.precipitation}mm` : 'Not available'}
-- General Weather: ${weather.weather_description || 'Not available'} 
+- Temperature: ${weather.temperature !== null && weather.temperature !== undefined ? `${weather.temperature}°C` : 'Not available'}
+- Humidity: ${weather.humidity !== null && weather.humidity !== undefined ? `${weather.humidity}%` : 'Not available'}
+- Soil Moisture (0-10cm): ${weather.soil_moisture_0_to_10cm !== null && weather.soil_moisture_0_to_10cm !== undefined ? `${weather.soil_moisture_0_to_10cm} m³/m³` : 'Not available'}
 
 Season: ${season}
 

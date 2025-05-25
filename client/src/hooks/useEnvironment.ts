@@ -3,6 +3,23 @@ import { EnvironmentReading, Recommendation } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 
+// Define interfaces for dashboard stats
+interface ProcessedDashboardStats {
+  totalPlants: number;
+  plantsNeedingWater: number;
+  healthStatus: string;
+  healthPercentage: number;
+  upcomingTasks: number; // Ensured to be a number
+  newPlantsThisMonth: number;
+  name?: string; // Used in Dashboard.tsx
+  // Include any other properties returned by /api/dashboard-stats
+}
+
+// Assume API might return 'upcomingTasks' as 'any' initially
+interface ApiDashboardStats extends Omit<ProcessedDashboardStats, 'upcomingTasks'> {
+  upcomingTasks: any; 
+}
+
 export function useEnvironment(options?: { enabled?: boolean }) {
   const { data: environmentData, isLoading: isEnvironmentLoading, error: environmentError } = useQuery<EnvironmentReading>({
     queryKey: ['/api/environment'],
@@ -91,14 +108,42 @@ export function useDashboardStats(options?: { enabled?: boolean }) {
     data: stats,
     isLoading,
     error,
-  } = useQuery({
+  } = useQuery<ProcessedDashboardStats>({
     queryKey: ['/api/dashboard-stats'],
-    queryFn: async () => {
+    queryFn: async (): Promise<ProcessedDashboardStats> => {
       const response = await fetch(`/api/dashboard-stats`);
       if (!response.ok) {
-        throw new Error('Failed to fetch dashboard stats');
+        // Attempt to get more error info from response body
+        let errorBody = 'Failed to fetch dashboard stats';
+        try {
+          const errJson = await response.json();
+          errorBody = errJson.message || errJson.error || JSON.stringify(errJson);
+        } catch (e) {
+          // Ignore if response body is not JSON or empty
+        }
+        throw new Error(`Failed to fetch dashboard stats: ${response.status} ${errorBody}`);
       }
-      return response.json();
+      const rawData: ApiDashboardStats = await response.json();
+
+      let processedUpcomingTasks: number;
+      if (rawData.upcomingTasks && typeof rawData.upcomingTasks === 'object' && !Array.isArray(rawData.upcomingTasks)) {
+        // If it's a single task object (and not null/undefined)
+        processedUpcomingTasks = 1;
+      } else if (Array.isArray(rawData.upcomingTasks)) {
+        // If it's an array of tasks
+        processedUpcomingTasks = rawData.upcomingTasks.length;
+      } else if (typeof rawData.upcomingTasks === 'number') {
+        // If it's already a number
+        processedUpcomingTasks = rawData.upcomingTasks;
+      } else {
+        // Otherwise (null, undefined, or unexpected type)
+        processedUpcomingTasks = 0;
+      }
+
+      return {
+        ...rawData,
+        upcomingTasks: processedUpcomingTasks,
+      };
     },
     enabled: options?.enabled,
   });

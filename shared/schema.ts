@@ -52,6 +52,7 @@ export const environmentReadings = pgTable("environment_readings", {
   temperature: real("temperature"),
   humidity: real("humidity"),
   lightLevel: text("light_level"),
+  soil_moisture_0_to_10cm: real("soil_moisture_0_to_10cm"), // Volumetric water content (m³/m³)
   readingTimestamp: timestamp("reading_timestamp").defaultNow(),
 });
 
@@ -73,9 +74,7 @@ export const careTasks = pgTable("care_tasks", {
 
 export const insertCareTaskSchema = createInsertSchema(careTasks).omit({
   id: true,
-  completed: true,
   completedDate: true,
-  skipped: true,
 });
 
 // AI Recommendations schema
@@ -91,8 +90,6 @@ export const recommendations = pgTable("recommendations", {
 
 export const insertRecommendationSchema = createInsertSchema(recommendations).omit({
   id: true,
-  applied: true,
-  createdAt: true,
 });
 
 // Care history schema
@@ -146,12 +143,13 @@ export type InsertCareHistory = z.infer<typeof insertCareHistorySchema>;
 export type PlantHealthMetric = typeof plantHealthMetrics.$inferSelect;
 export type InsertPlantHealthMetric = z.infer<typeof insertPlantHealthMetricsSchema>;
 
+export type EnrichedCareTask = CareTask & { plantName: string | null };
+
 // Interface for plant data used by Gemini service
 export interface PlantData {
   name: string;
   species: string | null;
   waterFrequencyDays: number | null;
-  lightRequirement: string | null;
   lastWatered: Date | null;
 }
 
@@ -160,4 +158,5 @@ export interface EnvironmentData {
   temperature: number | null;
   humidity: number | null;
   lightLevel: string | null;
+  soil_moisture_0_to_10cm?: number | null; // Added for Gemini, optional for now
 }

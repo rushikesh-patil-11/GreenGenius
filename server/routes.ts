@@ -870,13 +870,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
-      const success = await storage.deletePlant(plantId);
-      if (!success) {
+      // Attempt to delete the plant
+      // The storage.deletePlant method will throw an error if the plant is not found
+      // or if another database error occurs.
+      await storage.deletePlant(plantId);
+
+      // If deletePlant completes without error, the plant was successfully deleted.
+      // Return 204 No Content.
+      return res.status(204).send();
+
+    } catch (error: any) {
+      // Log the error for server-side debugging
+      console.error(`[API] Error in DELETE /api/plants/${req.params.id}:`, error);
+
+      // Check if the error message indicates 'not found' (this might need adjustment
+      // based on how storage.deletePlant signals a 'not found' error specifically,
+      // if it differentiates it from other errors).
+      if (error.message && error.message.toLowerCase().includes('not found')) {
         return res.status(404).json({ error: 'Plant not found' });
       }
-
-      return res.json({ success: true });
-    } catch (error) {
+      
+      // For all other errors, use the generic error handler
       return handleError(res, error);
     }
   });
@@ -1313,6 +1327,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         firstName: clerkUser.firstName,
         lastName: clerkUser.lastName,
       });
+
       if (!appUser || !appUser.id) {
         return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
       }

@@ -64,7 +64,7 @@ export const insertEnvironmentReadingSchema = createInsertSchema(environmentRead
 // Care tasks schema
 export const careTasks = pgTable("care_tasks", {
   id: serial("id").primaryKey(),
-  plantId: integer("plant_id").notNull().references(() => plants.id),
+  plantId: integer("plant_id").notNull().references(() => plants.id, { onDelete: "cascade" }),
   taskType: text("task_type").notNull(), // water, fertilize, prune, etc.
   dueDate: timestamp("due_date").notNull(),
   completed: boolean("completed").default(false),
@@ -81,7 +81,7 @@ export const insertCareTaskSchema = createInsertSchema(careTasks).omit({
 export const recommendations = pgTable("recommendations", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id),
-  plantId: integer("plant_id").references(() => plants.id),
+  plantId: integer("plant_id").references(() => plants.id, { onDelete: "cascade" }),
   recommendationType: text("recommendation_type").notNull(), // water, light, etc.
   message: text("message").notNull(),
   applied: boolean("applied").default(false),
@@ -95,7 +95,7 @@ export const insertRecommendationSchema = createInsertSchema(recommendations).om
 // Care history schema
 export const careHistory = pgTable("care_history", {
   id: serial("id").primaryKey(),
-  plantId: integer("plant_id").notNull().references(() => plants.id),
+  plantId: integer("plant_id").notNull().references(() => plants.id, { onDelete: "cascade" }),
   actionType: text("action_type").notNull(), // watered, fertilized, etc.
   notes: text("notes"),
   performedAt: timestamp("performed_at").defaultNow(),
@@ -109,7 +109,7 @@ export const insertCareHistorySchema = createInsertSchema(careHistory).omit({
 // Plant Health metrics schema
 export const plantHealthMetrics = pgTable("plant_health_metrics", {
   id: serial("id").primaryKey(),
-  plantId: integer("plant_id").notNull().references(() => plants.id),
+  plantId: integer("plant_id").notNull().references(() => plants.id, { onDelete: "cascade" }),
   waterLevel: integer("water_level").default(100), // 0-100
   lightLevel: integer("light_level").default(100), // 0-100
   overallHealth: integer("overall_health").default(100), // 0-100

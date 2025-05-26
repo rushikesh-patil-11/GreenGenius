@@ -95,7 +95,7 @@ export interface IStorage {
   getPlantsByUserId(userId: number): Promise<Plant[]>;
   createPlant(plant: InsertPlant): Promise<Plant>;
   updatePlant(id: number, plant: Partial<InsertPlant>): Promise<Plant | undefined>;
-  deletePlant(id: number): Promise<boolean>;
+  deletePlant(id: number): Promise<void>;
 
   // Environment readings operations
   getLatestEnvironmentReadingByUserId(userId: number): Promise<EnvironmentReading | undefined>;
@@ -292,24 +292,24 @@ export class DbStorage implements IStorage {
     } as Plant;
   }
 
-  async deletePlant(id: number): Promise<boolean> {
+  async deletePlant(plantId: number): Promise<void> {
     try {
-      // Corrected: this.db instead of this.db()
-      // Corrected: explicit type for tx (PostgresJsDatabase<typeof schema>)
-      const result = await this.db.transaction(async (tx: PostgresJsDatabase<typeof schema>) => {
-        // First, delete associated plant health metrics
-        await tx.delete(schema.plantHealthMetrics).where(eq(schema.plantHealthMetrics.plantId, id));
-        
-        // Then, delete the plant itself
-        const deleteResult = await tx.delete(schema.plants).where(eq(schema.plants.id, id)).returning();
-        return deleteResult.length > 0;
-      });
-      return result;
+      // First, delete any recommendations associated with this plant
+      await this.db.delete(schema.recommendations)
+        .where(eq(schema.recommendations.plantId, plantId));
+
+      // Then, delete the plant
+      const result = await this.db.delete(schema.plants)
+        .where(eq(schema.plants.id, plantId))
+        .returning();
+
+      if (result.length === 0) {
+        throw new Error(`Plant with ID ${plantId} not found`);
+      }
+      console.log(`[DbStorage] Successfully deleted plant with ID ${plantId} and its recommendations`);
     } catch (error) {
-      console.error(`[DbStorage] Error deleting plant with ID ${id}:`, error);
-      // Potentially re-throw or handle specific error types if needed
-      // For now, returning false indicates failure
-      return false;
+      console.error(`[DbStorage] Error deleting plant with ID ${plantId}:`, error);
+      throw error; // Re-throw the error to be handled by the route
     }
   }
 

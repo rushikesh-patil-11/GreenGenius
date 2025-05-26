@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, Droplet, Sun, Heart, Calendar, Edit, Trash2, AlertTriangle, MoreHorizontal, Sparkles, Brain } from "lucide-react";
+import { ArrowLeft, Droplet, Sun, Heart, Calendar, Edit, Trash2, AlertTriangle, MoreHorizontal, Sparkles, Brain, RefreshCcw } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +27,41 @@ export default function PlantDetails() {
   
   const { plant, healthMetrics, isLoading, error } = usePlantDetails(plantId);
   
+  useEffect(() => {
+    const loadSavedAiCareTips = async () => {
+      if (!plantId || plantId === 0) {
+        setAiCareTips([]); // Clear tips if plantId is invalid or not yet available
+        return;
+      }
+
+      setIsFetchingTips(true);
+      setTipsError(null);
+      try {
+        // Make a GET request to fetch previously saved tips
+        const savedTips = await apiRequest<{ category: string; tip: string; }[]>(
+          `/api/plants/${plantId}/ai-care-tips`, 
+          { method: 'GET' }
+        );
+        setAiCareTips(savedTips || []); // Handle null/undefined response by setting to empty array
+      } catch (err: any) {
+        console.error("Failed to load saved AI care tips:", err);
+        setAiCareTips([]); // Set to empty if there's an error (e.g., 404 if no tips yet)
+        // You could set a non-critical error message if needed, e.g.,
+        // setTipsError("Could not retrieve existing AI tips. Try generating new ones.");
+      } finally {
+        setIsFetchingTips(false);
+      }
+    };
+
+    // Only fetch tips if the main plant data is loaded and valid
+    if (plantId && plant && !isLoading) {
+      loadSavedAiCareTips();
+    } else if (!isLoading && !plant && plantId > 0) {
+      // If plant loading is finished but the plant itself wasn't found, clear tips.
+      setAiCareTips([]);
+    }
+  }, [plantId, plant, isLoading]); // Dependencies: re-run if these change
+
   if (isLoading) {
     return (
       <div className="flex h-screen bg-background">
@@ -271,6 +306,10 @@ export default function PlantDetails() {
                 {isFetchingTips ? (
                   <>
                     <MoreHorizontal className="mr-2 h-4 w-4 animate-spin" /> Generating...
+                  </>
+                ) : aiCareTips.length > 0 ? (
+                  <>
+                    <RefreshCcw className="mr-2 h-4 w-4" /> Refresh Tips
                   </>
                 ) : (
                   <>

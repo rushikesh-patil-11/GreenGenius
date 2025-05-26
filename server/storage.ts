@@ -5,14 +5,15 @@ import {
   CareTask, InsertCareTask,
   Recommendation, InsertRecommendation,
   CareHistory, InsertCareHistory,
-  PlantHealthMetric, InsertPlantHealthMetric
+  PlantHealthMetric, InsertPlantHealthMetric,
+  AiCareTip, InsertAiCareTip
   // Table objects (users, plants, etc.) will be accessed via schema.users, schema.plants
 } from "../shared/schema";
 import { eq, desc, sql, and, gte, lte, isNull, inArray, lt, gt, asc } from "drizzle-orm"; // Restored missing operators, added lt
 import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js'; 
 import postgres from 'postgres';
 import * as schema from "../shared/schema"; // Import all schema for DB typing
-import { generatePlantRecommendations } from "./services/gemini";
+import { generatePlantRecommendations } from "./services/aiService";
 
 // For upcoming tasks displayed on the dashboard
 export interface UpcomingTaskDisplay extends CareTask {
@@ -121,6 +122,10 @@ export interface IStorage {
   // Plant health metrics
   getPlantHealthMetrics(plantId: number): Promise<PlantHealthMetric | undefined>;
   updatePlantHealthMetrics(plantId: number, metrics?: Partial<InsertPlantHealthMetric>): Promise<PlantHealthMetric | undefined>;
+
+  // AI Care Tips
+  saveAiCareTips(plantId: number, userId: number, tips: Array<{ category: string; tip: string }>): Promise<void>;
+  getAiCareTips(plantId: number, userId: number): Promise<schema.AiCareTip[]>; // Added getAiCareTips
 
   // Dashboard stats
   getDashboardStats(userId: number): Promise<DashboardStats>;
@@ -696,6 +701,54 @@ export class DbStorage implements IStorage {
       };
       const [created] = await this.db.insert(schema.plantHealthMetrics).values(newMetricsData).returning();
       return created ? { ...created, updatedAt: new Date(created.updatedAt!) } as PlantHealthMetric : undefined;
+    }
+  }
+
+  // AI Care Tips operations
+  async saveAiCareTips(plantId: number, userId: number, tips: Array<{ category: string; tip: string }>): Promise<void> {
+    try {
+      await this.db.transaction(async (tx) => {
+        // Delete existing tips for this plant and user
+        await tx.delete(schema.aiCareTips).where(
+          and(
+            eq(schema.aiCareTips.plantId, plantId),
+            eq(schema.aiCareTips.userId, userId)
+          )
+        );
+
+        // Prepare new tips for insertion
+        if (tips && tips.length > 0) {
+          const tipsToInsert: schema.InsertAiCareTip[] = tips.map(tipItem => ({
+            plantId,
+            userId,
+            category: tipItem.category,
+            tip: tipItem.tip,
+            source: "AI_Groq", // Source is defaulted in schema, but explicit here
+          }));
+          await tx.insert(schema.aiCareTips).values(tipsToInsert);
+        }
+      });
+      console.log(`[DbStorage] AI care tips saved for plantId: ${plantId}, userId: ${userId}`);
+    } catch (error) {
+      console.error(`[DbStorage] Error saving AI care tips for plantId: ${plantId}, userId: ${userId}:`, error);
+      throw error; // Re-throw the error to be handled by the caller
+    }
+  }
+
+  async getAiCareTips(plantId: number, userId: number): Promise<schema.AiCareTip[]> {
+    try {
+      const tips = await this.db.query.aiCareTips.findMany({
+        where: and(
+          eq(schema.aiCareTips.plantId, plantId),
+          eq(schema.aiCareTips.userId, userId)
+        ),
+        orderBy: [desc(schema.aiCareTips.createdAt)], // Optional: order by creation date if needed
+      });
+      console.log(`[DbStorage] Fetched ${tips.length} AI care tips for plantId: ${plantId}, userId: ${userId}`);
+      return tips;
+    } catch (error) {
+      console.error(`[DbStorage] Error fetching AI care tips for plantId: ${plantId}, userId: ${userId}:`, error);
+      throw error;
     }
   }
 

@@ -1,26 +1,10 @@
 import * as dotenv from 'dotenv';
+import './env'; // Load environment variables first
 import path from 'path'; 
 import { fileURLToPath } from 'url'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const envPath = path.resolve(__dirname, '../.env');
-
-const dotenvResult = dotenv.config({ path: envPath });
-
-if (dotenvResult.error) {
-  console.error(`Error loading .env file from ${envPath}:`, dotenvResult.error);
-} else {
-  if (dotenvResult.parsed && Object.keys(dotenvResult.parsed).length > 0) {
-    console.log(`Successfully loaded .env file from ${envPath}.`);
-    console.log('Parsed variable keys by dotenv:', Object.keys(dotenvResult.parsed));
-  } else {
-    console.log(`.env file found at ${envPath}, but it might be empty, contain only comments, or an unexpected issue occurred during parsing.`);
-  }
-}
-
-console.log(`[server/index.ts] Value of process.env.DATABASE_URL after dotenv.config: ${process.env.DATABASE_URL}`);
 
 import { ClerkExpressRequireAuth, ClerkExpressWithAuth, clerkClient } from '@clerk/clerk-sdk-node';
 import express, { type Request, Response, NextFunction } from "express";

@@ -91,7 +91,7 @@ export default function Dashboard() {
           </div>
           
           {/* Overview Cards */}
-          <OverviewCards stats={stats || {}} loading={isStatsLoading} />
+          <OverviewCards stats={stats} loading={isStatsLoading} />
           
           {/* Environment Section */}
           <EnvironmentSection 

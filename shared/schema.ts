@@ -121,6 +121,24 @@ export const insertPlantHealthMetricsSchema = createInsertSchema(plantHealthMetr
   updatedAt: true,
 });
 
+// AI Care Tips schema
+export const aiCareTips = pgTable("ai_care_tips", {
+  id: serial("id").primaryKey(),
+  plantId: integer("plant_id").notNull().references(() => plants.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // Assuming tips are user-specific
+  category: text("category").notNull(), // e.g., "Watering", "Sunlight"
+  tip: text("tip").notNull(),
+  source: text("source").default("AI_Groq"), // To track where the tip came from
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()), // Automatically update on modification
+});
+
+export const insertAiCareTipSchema = createInsertSchema(aiCareTips).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Type exports
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -142,6 +160,9 @@ export type InsertCareHistory = z.infer<typeof insertCareHistorySchema>;
 
 export type PlantHealthMetric = typeof plantHealthMetrics.$inferSelect;
 export type InsertPlantHealthMetric = z.infer<typeof insertPlantHealthMetricsSchema>;
+
+export type AiCareTip = typeof aiCareTips.$inferSelect;
+export type InsertAiCareTip = z.infer<typeof insertAiCareTipSchema>;
 
 export type EnrichedCareTask = CareTask & { plantName: string | null };
 

@@ -47,6 +47,7 @@ const healthStatusToNumeric = (statusString: string): number => {
 // These will be initialized by the initializeDatabase function
 let dbClient: postgres.Sql<{}>;
 let globalDbInstance: PostgresJsDatabase<typeof schema>;
+export { globalDbInstance as dbInstance }; // Export for direct use if needed
 
 // Function to initialize the database connection
 export function initializeDatabase() {
@@ -180,13 +181,14 @@ export class DbStorage implements IStorage {
       const effectiveUserName = attempt === 0 ? baseUserName : `${baseUserName}_${Math.random().toString(36).substring(2, 7)}`;
       
       try {
-        const newUserRecord = await this.db.insert(schema.users).values({
+        const userData: InsertUser = {
           clerkId: clerkId,
           username: effectiveUserName,
           email: clerkUserData.email,
           name: newName,
-          // password will be null by default due to schema definition (text("password"))
-        }).returning();
+          // password will be undefined here, matching its optional nature in InsertUser
+        };
+        const newUserRecord = await this.db.insert(schema.users).values(userData).returning();
         
         if (newUserRecord.length === 0) {
           console.error(`[DbStorage] Failed to create or retrieve user after insert for Clerk ID: ${clerkId} (attempt ${attempt + 1})`);
@@ -242,10 +244,77 @@ export class DbStorage implements IStorage {
     })) as Plant[];
   }
 
-  async createPlant(plant: InsertPlant): Promise<Plant> {
-    console.log('[storage.ts] DbStorage.createPlant: Attempting to insert plant:', JSON.stringify(plant, null, 2));
+  async createPlant(plantInput: schema.InsertPlant): Promise<Plant> {
+    console.log('[storage.ts] DbStorage.createPlant: Attempting to insert plant:', JSON.stringify(plantInput, null, 2));
     try {
-      const [newPlantFromDb] = await this.db.insert(schema.plants).values(plant).returning();
+      // Runtime check for required fields directly on plantInput
+      if (plantInput.userId === undefined || plantInput.userId === null || typeof plantInput.userId !== 'number' || 
+          typeof plantInput.name !== 'string' || !plantInput.name) {
+        console.error('[storage.ts] DbStorage.createPlant: CRITICAL - userId or name is missing/invalid in the input plant object.', plantInput);
+        throw new Error('Internal Server Error: Cannot create plant without valid userId and name.');
+      }
+
+      // Manually construct the object for insertion.
+      // Omit 'id' as it's auto-generated.
+      // Use fields directly from plantInput, assuming plantInput conforms to schema.InsertPlant.
+      const dataToInsert: schema.InsertPlant = {
+        // id: undefined, // REMOVED - Drizzle handles serial PKs; this line caused a lint error.
+        // Required fields from schema
+        userId: plantInput.userId, // Use directly from plantInput
+        name: plantInput.name,     // Use directly from plantInput
+
+        // Perenual API fields (optional or nullable in schema)
+        perenual_id: plantInput.perenual_id,
+        scientific_name: plantInput.scientific_name,
+        other_name: plantInput.other_name,
+        family: plantInput.family,
+        origin: plantInput.origin,
+        type: plantInput.type,
+        dimensions: plantInput.dimensions,
+        cycle: plantInput.cycle,
+        watering_general_benchmark: plantInput.watering_general_benchmark,
+        sunlight: plantInput.sunlight,
+        pruning_month: plantInput.pruning_month,
+        hardiness: plantInput.hardiness,
+        flowers: plantInput.flowers,
+        flowering_season: plantInput.flowering_season,
+        soil: plantInput.soil,
+        pest_susceptibility: plantInput.pest_susceptibility,
+        cones: plantInput.cones,
+        fruits: plantInput.fruits,
+        edible_fruit: plantInput.edible_fruit,
+        fruiting_season: plantInput.fruiting_season,
+        leaf: plantInput.leaf,
+        edible_leaf: plantInput.edible_leaf,
+        growth_rate: plantInput.growth_rate,
+        maintenance: plantInput.maintenance,
+        medicinal: plantInput.medicinal,
+        poisonous_to_humans: plantInput.poisonous_to_humans,
+        poisonous_to_pets: plantInput.poisonous_to_pets,
+        drought_tolerant: plantInput.drought_tolerant,
+        salt_tolerant: plantInput.salt_tolerant,
+        thorny: plantInput.thorny,
+        invasive: plantInput.invasive,
+        rare: plantInput.rare,
+        tropical: plantInput.tropical,
+        cuisine: plantInput.cuisine,
+        indoor: plantInput.indoor,
+        care_level: plantInput.care_level,
+        description: plantInput.description,
+        api_image_url: plantInput.api_image_url,
+        // Ensure Date objects or null for timestamp fields
+        last_api_sync: plantInput.last_api_sync ? new Date(plantInput.last_api_sync) : null,
+
+        // Original plant fields (optional or nullable in schema)
+        species: plantInput.species,
+        acquiredDate: plantInput.acquiredDate ? new Date(plantInput.acquiredDate) : null,
+        status: plantInput.status,
+        lastWatered: plantInput.lastWatered ? new Date(plantInput.lastWatered) : null,
+        waterFrequencyDays: plantInput.waterFrequencyDays,
+        notes: plantInput.notes,
+      };
+
+      const [newPlantFromDb] = await this.db.insert(schema.plants).values(dataToInsert).returning();
 
       console.log('[storage.ts] DbStorage.createPlant: Result from DB insert:', JSON.stringify(newPlantFromDb, null, 2));
 

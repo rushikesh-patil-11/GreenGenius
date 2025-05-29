@@ -102,6 +102,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET a specific plant by ID
+  app.get('/api/plants/:id', ClerkExpressRequireAuth(), async (req: any, res) => {
+    try {
+      if (!req.auth || !req.auth.userId) {
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+      }
+      const clerkUserId = req.auth.userId;
+
+      const plantId = parseInt(req.params.id, 10);
+      if (isNaN(plantId)) {
+        return res.status(400).json({ error: 'Invalid plant ID format.' });
+      }
+
+      const plant = await storage.getPlantById(plantId);
+
+      if (!plant) {
+        return res.status(404).json({ error: 'Plant not found.' });
+      }
+
+      // Verify the plant belongs to the authenticated user
+      // First, get the internal user ID from Clerk ID
+      const user = await storage.getUserByClerkId(clerkUserId);
+      if (!user) {
+        // This should ideally not happen if ClerkExpressRequireAuth is working
+        // and the user exists in our DB from a previous sync/login.
+        return res.status(404).json({ error: 'Authenticated user not found in local database.' });
+      }
+
+      if (plant.userId !== user.id) {
+        // Plant found, but does not belong to this user
+        return res.status(403).json({ error: 'Forbidden', details: 'You do not have permission to access this plant.' });
+      }
+
+      return res.json(plant);
+    } catch (error) {
+      return handleError(res, error, `[GET /api/plants/:id - Plant ID: ${req.params.id}]`);
+    }
+  });
+
   // New route for AI-powered plant care tips
   app.post('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
@@ -416,7 +455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: validatedBody.name!, // name is required by schema, so validatedBody.name is string
         userId: appUser.id,        // from appUser
         species: validatedBody.species,          // string | undefined from Zod schema
-        imageUrl: validatedBody.imageUrl,        // string | undefined from Zod schema
+        api_image_url: validatedBody.imageUrl,   // string | undefined from Zod schema, mapped to api_image_url
         acquiredDate: validatedBody.acquiredDate,  // Date | undefined from Zod schema
         status: validatedBody.status,            // string | undefined from Zod schema
         // lastWatered is Date | undefined from Zod schema, default to new Date() if undefined

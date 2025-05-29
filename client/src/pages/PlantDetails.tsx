@@ -159,13 +159,13 @@ export default function PlantDetails() {
   // useEffect to fetch details from Perenual API when plant.name is available
   useEffect(() => {
     const fetchDetailsFromPerenual = async () => {
-      if (plant && plant.name) {
+      if (plant && plant.perenual_id) { // Use perenual_id for fetching
         setIsFetchingPerenualDetails(true);
         setPerenualDetailsError(null);
         setPerenualPlantDetails(null); // Reset on new fetch
         try {
           const response = await apiRequest<PerenualPlant>(
-            `/api/plant-details/${encodeURIComponent(plant.name)}`,
+            `/api/perenual-details/${plant.perenual_id}`, // Use the new endpoint with perenual_id
             { method: 'GET' }
           );
           if (response) {

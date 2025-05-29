@@ -22,9 +22,9 @@ export function PlantCard({ plant, healthMetrics }: PlantCardProps) {
   return (
     <Card className="plant-card bg-white dark:bg-card rounded-xl overflow-hidden shadow-natural">
       <div className="w-full h-48 bg-gray-200 dark:bg-gray-800 overflow-hidden">
-        {plant.imageUrl ? (
+        {plant.api_image_url ? (
           <img 
-            src={plant.imageUrl} 
+            src={plant.api_image_url} 
             alt={plant.name} 
             className="w-full h-48 object-cover"
           />

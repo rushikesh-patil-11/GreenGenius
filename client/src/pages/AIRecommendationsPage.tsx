@@ -4,18 +4,20 @@ import MobileNavigation from "@/components/layout/MobileNavigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Droplet, Sun, Check, Lightbulb } from "lucide-react";
+import AppLoader from "@/components/ui/AppLoader";
 import { useEnvironment } from "@/hooks/useEnvironment";
 import { usePlants } from "@/hooks/usePlants";
 import { Recommendation } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@clerk/clerk-react";
 
 export default function AIRecommendationsPage() {
-  const userId = 1; // In a real app, this would come from authentication
+  const { userId, isSignedIn } = useAuth();
   const { toast } = useToast();
   const [applyingIds, setApplyingIds] = useState<number[]>([]);
   
-  const { recommendations, isLoading, applyRecommendation } = useEnvironment(userId);
-  const { plants, isLoading: isPlantsLoading } = usePlants(userId);
+  const { recommendations, isLoading, applyRecommendation } = useEnvironment({ enabled: !!isSignedIn && !!userId });
+  const { plants, isLoading: isPlantsLoading } = usePlants({ enabled: !!isSignedIn && !!userId });
   
   const getPlantName = (plantId?: number) => {
     if (!plantId) return "All Plants";
@@ -67,7 +69,7 @@ export default function AIRecommendationsPage() {
                     : 'Light Adjustment'}
                 </h3>
                 <span className="text-muted-foreground text-sm">
-                  For: {getPlantName(recommendation.plantId)}
+                  For: {getPlantName(recommendation.plantId === null ? undefined : recommendation.plantId)}
                 </span>
               </div>
               <p className="text-textColor dark:text-foreground mb-4">{recommendation.message}</p>
@@ -108,25 +110,7 @@ export default function AIRecommendationsPage() {
           
           {/* Recommendations */}
           {isLoading || isPlantsLoading ? (
-            <div className="space-y-6">
-              {[...Array(3)].map((_, i) => (
-                <Card key={i} className="bg-white dark:bg-card shadow-natural">
-                  <CardContent className="p-6">
-                    <div className="animate-pulse flex space-x-4">
-                      <div className="rounded-full bg-gray-200 dark:bg-gray-700 h-12 w-12"></div>
-                      <div className="flex-1 space-y-4 py-1">
-                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-                        <div className="space-y-2">
-                          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
-                        </div>
-                        <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <AppLoader title="Generating AI Recommendations..." message="Analyzing environmental data to provide smart care tips." />
           ) : recommendations.length === 0 ? (
             <Card className="bg-white dark:bg-card shadow-natural">
               <CardContent className="p-8 text-center">

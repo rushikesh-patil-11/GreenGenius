@@ -7,6 +7,7 @@ import { PlantCard } from "@/components/plants/PlantCard";
 import AddPlantModal from "@/components/modals/AddPlantModal";
 import { usePlants } from "@/hooks/usePlants";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AppLoader from "@/components/ui/AppLoader";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@clerk/clerk-react";
 import { queryClient } from "@/lib/queryClient";
@@ -18,7 +19,7 @@ export default function Plants() {
   const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   
-  const { plants, healthMetrics, isLoading } = usePlants(userId);
+  const { plants, healthMetrics, isLoading } = usePlants({ enabled: !!userId });
   
   const handleAddPlant = (newPlant: Plant) => {
     queryClient.invalidateQueries({ queryKey: ['/api/plants'] });
@@ -118,28 +119,7 @@ export default function Plants() {
           
           {/* Plants Grid */}
           {isLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-card rounded-xl overflow-hidden shadow-natural animate-pulse">
-                  <div className="w-full h-48 bg-gray-200 dark:bg-gray-700"></div>
-                  <div className="p-5 space-y-4">
-                    <div className="flex justify-between">
-                      <div className="h-6 w-1/2 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                      <div className="h-6 w-1/4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                    </div>
-                    <div className="h-4 w-1/3 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                    <div className="space-y-3">
-                      {[...Array(3)].map((_, j) => (
-                        <div key={j} className="flex justify-between items-center">
-                          <div className="h-4 w-1/4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                          <div className="h-2 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <AppLoader title="Loading Your Garden..." message="Fetching your plant collection. Please wait." />
           ) : filteredPlants.length === 0 ? (
             <div className="text-center py-16 bg-white dark:bg-card rounded-lg shadow-natural">
               {searchQuery ? (

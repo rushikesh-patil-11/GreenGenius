@@ -5,6 +5,7 @@ import MobileNavigation from "@/components/layout/MobileNavigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import AppLoader from "@/components/ui/AppLoader";
 import { useCareSchedule } from "@/hooks/useCareSchedule";
 import { Droplet, Scissors, Check, X } from "lucide-react";
 import { formatRelativeDate, formatDate } from "@/lib/utils";
@@ -124,19 +125,7 @@ export default function CareSchedulePage() {
           <Card className="bg-white dark:bg-card shadow-natural">
             <CardContent className="p-6">
               {isLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="flex items-center p-3 border border-gray-100 dark:border-gray-800 rounded-lg animate-pulse">
-                      <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full mr-4"></div>
-                      <div className="flex-1">
-                        <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-2"></div>
-                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
-                      </div>
-                      <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full mr-2"></div>
-                      <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-                    </div>
-                  ))}
-                </div>
+                <AppLoader title="Loading Care Schedule..." message="Fetching your upcoming plant care tasks." />
               ) : filteredTasks.length === 0 ? (
                 <div className="text-center py-10">
                   <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-4" />

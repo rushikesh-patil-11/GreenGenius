@@ -1,7 +1,8 @@
 import { useState, useEffect, ElementType } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, Droplet, Sun, Heart, Edit, Trash2, AlertTriangle, MoreHorizontal, Sparkles, RefreshCcw, Globe, Info, BookOpen, ClipboardList, AlertCircle, Leaf as LeafIcon, Thermometer, Scissors, ShieldCheck, Zap } from "lucide-react";
+import { ArrowLeft, Droplet, Sun, Heart, Edit, Trash2, AlertTriangle, MoreHorizontal, Sparkles, RefreshCcw, Globe, Info, BookOpen, ClipboardList, AlertCircle, Leaf as LeafIcon, Thermometer, Scissors, ShieldCheck, Zap, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import AppLoader from "@/components/ui/AppLoader";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -200,20 +201,7 @@ export default function PlantDetails() {
         <Sidebar />
         <main className="main-content flex-1 overflow-y-auto pb-16">
           <div className="p-6 md:p-8">
-            <div className="animate-pulse">
-              <div className="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded mb-8"></div>
-              <div className="h-48 bg-gray-200 dark:bg-gray-700 rounded-xl mb-6"></div>
-              <div className="h-8 w-48 bg-gray-200 dark:bg-gray-700 rounded mb-2"></div>
-              <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded mb-6"></div>
-              <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="flex justify-between items-center">
-                    <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                    <div className="h-2 w-48 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <AppLoader title="Gathering Plant Wisdom..." message="We're fetching the freshest details. This might take a moment." />
           </div>
         </main>
         <MobileNavigation />
@@ -310,7 +298,7 @@ export default function PlantDetails() {
     if (perenualPlantDetails?.default_image?.original_url) return perenualPlantDetails.default_image.original_url;
     if (perenualPlantDetails?.default_image?.regular_url) return perenualPlantDetails.default_image.regular_url;
     if (perenualPlantDetails?.default_image?.medium_url) return perenualPlantDetails.default_image.medium_url;
-    if (plant?.imageUrl) return plant.imageUrl;
+    if (plant?.api_image_url) return plant.api_image_url;
     return "/placeholder.svg"; // Fallback placeholder
   };
 
@@ -453,7 +441,7 @@ export default function PlantDetails() {
                       <h3 className="text-2xl font-semibold font-poppins text-foreground dark:text-gray-100">{tab.title}</h3>
                     </div>
                     <div className="space-y-3 text-sm">
-                      {tab.content.map((item: TabDetailItem, idx) => (
+                      {tab.content.map((item: TabDetailItem, idx: number) => (
                         item.value && (
                           <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-1 items-start">
                             <p className="font-medium text-muted-foreground dark:text-gray-400 md:col-span-1">{item.label}:</p>
@@ -490,13 +478,20 @@ export default function PlantDetails() {
                       {isFetchingTips ? "Generating..." : aiCareTips.length > 0 ? "Regenerate Tips" : "Generate Tips"}
                     </Button>
                   </div>
-                  {isFetchingTips && aiCareTips.length === 0 && (
-                    <div className="text-center py-8">
-                      <RefreshCcw className="mx-auto h-10 w-10 animate-spin text-primary mb-3" />
-                      <p className="text-muted-foreground dark:text-gray-400">Fetching fresh tips, please wait...</p>
+                  {isFetchingTips && (
+                    <div className="flex justify-center items-center py-8">
+                      <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                      <p className="ml-2 text-muted-foreground">Fetching tips...</p>
                     </div>
                   )}
-                  {tipsError && <p className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">Error: {tipsError}</p>}
+
+                  {tipsError && (
+                    <div className="text-destructive bg-destructive/10 p-4 rounded-md text-sm">
+                      <AlertTriangle className="inline-block h-4 w-4 mr-2 align-middle" />
+                      Error: {tipsError}
+                    </div>
+                  )}
+
                   {aiCareTips.length > 0 ? (
                     <ul className="space-y-4">
                       {aiCareTips.map((tip, index) => (
@@ -541,7 +536,7 @@ export default function PlantDetails() {
             </DialogContent>
           </Dialog>
 
-        </div>
+        </div> 
       </main>
       <MobileNavigation />
     </div>

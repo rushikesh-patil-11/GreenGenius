@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, ElementType } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, Droplet, Sun, Heart, Calendar, Edit, Trash2, AlertTriangle, MoreHorizontal, Sparkles, Brain, RefreshCcw } from "lucide-react";
+import { ArrowLeft, Droplet, Sun, Heart, Edit, Trash2, AlertTriangle, MoreHorizontal, Sparkles, RefreshCcw, Globe, Info, BookOpen, ClipboardList, AlertCircle, Leaf as LeafIcon, Thermometer, Scissors, ShieldCheck, Zap } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +15,93 @@ import { formatDate, formatNextWatering, getHealthStatus } from "@/lib/utils";
 import { apiRequest } from "@/lib/apiRequest";
 import { queryClient } from "@/lib/queryClient";
 
+// Types for Perenual API Data
+interface PerenualImage {
+  image_id: number;
+  license: number;
+  license_name: string;
+  license_url: string;
+  original_url: string;
+  regular_url: string;
+  medium_url: string;
+  small_url: string;
+  thumbnail: string;
+}
+
+interface PerenualPlant {
+  id: number;
+  common_name: string;
+  scientific_name: string[];
+  other_name?: string[];
+  family?: string | null;
+  origin?: string[] | null;
+  type?: string;
+  dimension?: string;
+  cycle?: string;
+  attracts?: string[];
+  propagation?: string[];
+  hardiness?: { min: string; max: string };
+  hardiness_location?: { full_url: string; full_iframe: string };
+  watering?: string;
+  watering_general_benchmark?: { value: string; unit: string };
+  sunlight?: string[] | string;
+  maintenance?: string | null;
+  care_guides?: string; // URL to care guides
+  soil?: string[];
+  growth_rate?: string;
+  drought_tolerant?: boolean;
+  salt_tolerant?: boolean;
+  thorny?: boolean;
+  invasive?: boolean;
+  tropical?: boolean;
+  cuisine?: boolean;
+  indoor?: boolean;
+  flowers?: boolean;
+  flower_color?: string;
+  cones?: boolean;
+  fruits?: boolean;
+  edible_fruit?: boolean;
+  fruit_color?: string[];
+  fruiting_season?: string;
+  harvest_season?: string;
+  leaf?: boolean;
+  leaf_color?: string[];
+  edible_leaf?: boolean;
+  medicinal?: boolean;
+  poisonous_to_humans?: number; // 0 or 1 typically
+  poisonous_to_pets?: number; // 0 or 1 typically
+  description?: string;
+  default_image?: PerenualImage;
+  problem?: string | null;
+  pruning_month?: string[];
+  // Add any other fields you anticipate or find in the API response
+}
+
+// Interface for items within tab content sections
+interface TabDetailItem {
+  label: string;
+  value?: string | boolean | null; // Optional, as links might not use it directly
+  type?: 'link';                   // Optional, only for link items
+  href?: string | null;            // Optional, only for link items
+}
+
+interface TabConfig {
+  value: string;
+  title: string;
+  icon: ElementType;
+  content: TabDetailItem[];
+}
+
+interface PerenualApiResponse {
+  data: PerenualPlant[];
+  to: number;
+  per_page: number;
+  current_page: number;
+  from: number;
+  last_page: number;
+  total: number;
+}
+
 export default function PlantDetails() {
   const { id } = useParams();
   const plantId = parseInt(id || "0");
@@ -24,6 +112,11 @@ export default function PlantDetails() {
   const [aiCareTips, setAiCareTips] = useState<Array<{ category: string; tip: string }>>([]);
   const [isFetchingTips, setIsFetchingTips] = useState(false);
   const [tipsError, setTipsError] = useState<string | null>(null);
+
+  // State for Perenual API plant details
+  const [perenualPlantDetails, setPerenualPlantDetails] = useState<PerenualPlant | null>(null);
+  const [isFetchingPerenualDetails, setIsFetchingPerenualDetails] = useState(false);
+  const [perenualDetailsError, setPerenualDetailsError] = useState<string | null>(null);
   
   const { plant, healthMetrics, isLoading, error } = usePlantDetails(plantId);
   
@@ -61,6 +154,45 @@ export default function PlantDetails() {
       setAiCareTips([]);
     }
   }, [plantId, plant, isLoading]); // Dependencies: re-run if these change
+
+  // useEffect to fetch details from Perenual API when plant.name is available
+  useEffect(() => {
+    const fetchDetailsFromPerenual = async () => {
+      if (plant && plant.name) {
+        setIsFetchingPerenualDetails(true);
+        setPerenualDetailsError(null);
+        setPerenualPlantDetails(null); // Reset on new fetch
+        try {
+          const response = await apiRequest<PerenualPlant>(
+            `/api/plant-details/${encodeURIComponent(plant.name)}`,
+            { method: 'GET' }
+          );
+          if (response) {
+            setPerenualPlantDetails(response); // Store the plant object directly
+          } else {
+            // No specific error, just means no data from Perenual for this plant name
+            // console.log("No details found in Perenual for:", plant.name);
+            setPerenualPlantDetails(null);
+          }
+        } catch (err: any) {
+          console.error("Failed to fetch plant details from Perenual API:", err);
+          setPerenualDetailsError(err.message || "Could not load additional details from external database.");
+          setPerenualPlantDetails(null);
+        } finally {
+          setIsFetchingPerenualDetails(false);
+        }
+      }
+    };
+
+    if (plant && !isLoading && plantId > 0) { // Ensure primary plant data is loaded and plantId is valid
+      fetchDetailsFromPerenual();
+    } else if (!isLoading && !plant && plantId > 0) {
+      // If plant loading is finished but the plant itself wasn't found, clear Perenual details too.
+      setPerenualPlantDetails(null);
+      setIsFetchingPerenualDetails(false);
+      setPerenualDetailsError(null);
+    }
+  }, [plant, isLoading, plantId]); // Re-run if plant data or plantId changes
 
   if (isLoading) {
     return (
@@ -173,233 +305,245 @@ export default function PlantDetails() {
     }
   };
 
+  // Determine the best image URL to use
+  const getPlantImageUrl = () => {
+    if (perenualPlantDetails?.default_image?.original_url) return perenualPlantDetails.default_image.original_url;
+    if (perenualPlantDetails?.default_image?.regular_url) return perenualPlantDetails.default_image.regular_url;
+    if (perenualPlantDetails?.default_image?.medium_url) return perenualPlantDetails.default_image.medium_url;
+    if (plant?.imageUrl) return plant.imageUrl;
+    return "/placeholder.svg"; // Fallback placeholder
+  };
+
+  const tabsConfigData: TabConfig[] = [
+    { value: "overview", title: "Plant Overview", icon: Info, content: [
+      { label: "Description", value: perenualPlantDetails?.description },
+      { label: "Family", value: perenualPlantDetails?.family },
+      { label: "Type", value: perenualPlantDetails?.type },
+      { label: "Dimensions", value: perenualPlantDetails?.dimension },
+      { label: "Other Names", value: perenualPlantDetails?.other_name?.join(', ') },
+    ]},
+    { value: "care", title: "Care Guide", icon: BookOpen, content: [
+      { label: "Watering Needs", value: perenualPlantDetails?.watering },
+      { label: "Watering Benchmark", value: perenualPlantDetails?.watering_general_benchmark ? `${perenualPlantDetails.watering_general_benchmark.value} ${perenualPlantDetails.watering_general_benchmark.unit}` : null },
+      { label: "Sunlight", value: Array.isArray(perenualPlantDetails?.sunlight) ? perenualPlantDetails.sunlight.join(', ') : perenualPlantDetails?.sunlight },
+      { label: "Soil", value: perenualPlantDetails?.soil?.join(', ') },
+      { label: "Maintenance", value: perenualPlantDetails?.maintenance },
+      { label: "Pruning Months", value: perenualPlantDetails?.pruning_month?.join(', ') },
+      { label: "Hardiness Zone", value: perenualPlantDetails?.hardiness ? `${perenualPlantDetails.hardiness.min} - ${perenualPlantDetails.hardiness.max}` : null },
+      { type: "link" as const, label: "External Care Guide", href: perenualPlantDetails?.care_guides },
+    ]},
+    { value: "characteristics", title: "Characteristics", icon: LeafIcon, content: [
+      { label: "Growth Rate", value: perenualPlantDetails?.growth_rate },
+      { label: "Drought Tolerant", value: perenualPlantDetails?.drought_tolerant ? 'Yes' : 'No' },
+      { label: "Salt Tolerant", value: perenualPlantDetails?.salt_tolerant ? 'Yes' : 'No' },
+      { label: "Indoor Plant", value: perenualPlantDetails?.indoor ? 'Yes' : 'No' },
+      { label: "Flowers", value: perenualPlantDetails?.flowers ? `Yes (${perenualPlantDetails.flower_color || 'color not specified'})` : 'No' },
+      { label: "Fruits", value: perenualPlantDetails?.fruits ? `Yes (Edible: ${perenualPlantDetails.edible_fruit ? 'Yes' : 'No'})` : 'No' },
+      { label: "Thorny", value: perenualPlantDetails?.thorny ? 'Yes' : 'No' },
+      { label: "Invasive", value: perenualPlantDetails?.invasive ? 'Yes' : 'No' },
+      { label: "Tropical", value: perenualPlantDetails?.tropical ? 'Yes' : 'No' },
+      { label: "Cuisine Use", value: perenualPlantDetails?.cuisine ? 'Yes' : 'No' },
+    ]},
+    { value: "healthSafety", title: "Health & Safety", icon: ShieldCheck, content: [
+      { label: "Poisonous to Humans", value: perenualPlantDetails?.poisonous_to_humans === 1 ? 'Yes' : perenualPlantDetails?.poisonous_to_humans === 0 ? 'No' : 'N/A' },
+      { label: "Poisonous to Pets", value: perenualPlantDetails?.poisonous_to_pets === 1 ? 'Yes' : perenualPlantDetails?.poisonous_to_pets === 0 ? 'No' : 'N/A' },
+      { label: "Medicinal", value: perenualPlantDetails?.medicinal ? 'Yes' : 'No' },
+      { label: "Known Problems", value: perenualPlantDetails?.problem },
+    ]}
+  ];
+
+  const plantImageUrl = getPlantImageUrl();
+
   return (
-    <div className="flex h-screen bg-background">
-      {/* Desktop Sidebar */}
+    <div className="flex min-h-screen bg-gradient-to-br from-background to-background-muted dark:from-gray-900 dark:to-gray-800">
       <Sidebar />
-      
-      {/* Main Content */}
-      <main className="main-content flex-1 overflow-y-auto pb-16">
-        <div className="p-6 md:p-8">
-          {/* Back Button */}
-          <Link href="/plants">
-            <Button variant="ghost" className="mb-6">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Plants
-            </Button>
+      <main className="main-content flex-1 overflow-y-auto pb-16 font-sans">
+        <div className="p-4 md:p-8 max-w-5xl mx-auto">
+          <Link href="/plants" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6 group">
+            <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
+            Back to Plants
           </Link>
-          
-          {/* Plant Header */}
-          <div className="bg-white dark:bg-card rounded-xl overflow-hidden shadow-natural mb-6">
-            <div className="relative h-64 w-full">
-              {plant.imageUrl ? (
-                <img 
-                  src={plant.imageUrl} 
-                  alt={plant.name} 
-                  className="w-full h-full object-cover"
-                />
+
+          {/* Hero Section */}
+          <div className="relative rounded-xl overflow-hidden shadow-2xl mb-8 bg-card dark:bg-gray-800/50">
+            <div className="aspect-[16/9] md:aspect-[21/9] w-full">
+              {isFetchingPerenualDetails && plantImageUrl === "/placeholder.svg" ? (
+                <div className="w-full h-full flex items-center justify-center bg-gray-300 dark:bg-gray-700 animate-pulse">
+                  <LeafIcon className="h-16 w-16 text-gray-400 dark:text-gray-500" />
+                </div>
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-primary/10">
-                  <Droplet className="text-primary h-24 w-24 opacity-30" />
-                </div>
+                <img
+                  src={plantImageUrl}
+                  alt={perenualPlantDetails?.common_name || plant.name}
+                  className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                />
               )}
-              <div className="absolute top-4 right-4 flex space-x-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-2" align="end">
-                    <div className="flex flex-col space-y-1">
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 text-sm h-9 font-normal"
-                        onClick={() => setIsDeleteDialogOpen(true)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete Plant
-                      </Button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
             </div>
-            
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h1 className="text-2xl font-bold font-poppins text-textColor dark:text-foreground">{plant.name}</h1>
-                  <p className="text-muted-foreground mt-1">{plant.species || "Unknown species"}</p>
-                </div>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${healthStatus.color}`}>
-                  {healthStatus.status}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-textColor dark:text-foreground font-medium flex items-center">
-                      <Droplet className="text-secondary mr-2 h-4 w-4" /> Water Level
-                    </span>
-                    <ProgressBar value={waterLevel} maxValue={100} className="w-32 bg-gray-200 dark:bg-gray-700" color="bg-secondary" />
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-textColor dark:text-foreground font-medium flex items-center">
-                      <Sun className="text-warning mr-2 h-4 w-4" /> Light Level
-                    </span>
-                    <ProgressBar value={lightLevel} maxValue={100} className="w-32 bg-gray-200 dark:bg-gray-700" color="bg-warning" />
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-textColor dark:text-foreground font-medium flex items-center">
-                      <Heart className="text-primary mr-2 h-4 w-4" /> Overall Health
-                    </span>
-                    <ProgressBar 
-                      value={overallHealth} 
-                      maxValue={100} 
-                      className="w-32 bg-gray-200 dark:bg-gray-700" 
-                      color={overallHealth >= 75 ? "bg-success" : overallHealth >= 50 ? "bg-warning" : "bg-destructive"} 
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-4">
-                  <div className="flex items-center">
-                    <Calendar className="text-muted-foreground h-4 w-4 mr-2" />
-                    <span className="text-sm text-muted-foreground">Acquired: </span>
-                    <span className="text-sm text-textColor dark:text-foreground ml-1">
-                      {plant.acquiredDate ? formatDate(plant.acquiredDate) : 'Not specified'}
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <Droplet className="text-muted-foreground h-4 w-4 mr-2" />
-                    <span className="text-sm text-muted-foreground">Water frequency: </span>
-                    <span className="text-sm text-textColor dark:text-foreground ml-1">
-                      {plant.waterFrequencyDays ? `Every ${plant.waterFrequencyDays} days` : 'Not set'}
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <Droplet className="text-muted-foreground h-4 w-4 mr-2" />
-                    <span className="text-sm text-muted-foreground">Last watered: </span>
-                    <span className="text-sm text-textColor dark:text-foreground ml-1">
-                      {plant.lastWatered ? formatDate(plant.lastWatered) : 'Not recorded'}
-                    </span>
-                  </div>
-                  <div className="flex items-center">
-                    <Calendar className="text-muted-foreground h-4 w-4 mr-2" />
-                    <span className="text-sm text-muted-foreground">Next watering: </span>
-                    <span className={`text-sm ml-1 font-medium ${nextWatering === 'Today!' ? 'text-destructive' : 'text-textColor dark:text-foreground'}`}>
-                      {nextWatering}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* AI Care Tips Section */}
-          <div className="mt-8 pt-6 border-t border-border dark:border-gray-700">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold font-poppins text-textColor dark:text-foreground flex items-center">
-                <Sparkles className="mr-2 h-5 w-5 text-primary" /> AI Powered Care Tips
-              </h2>
-              <Button onClick={fetchAiCareTips} disabled={isFetchingTips || !plant} variant="outline" size="sm">
-                {isFetchingTips ? (
-                  <>
-                    <MoreHorizontal className="mr-2 h-4 w-4 animate-spin" /> Generating...
-                  </>
-                ) : aiCareTips.length > 0 ? (
-                  <>
-                    <RefreshCcw className="mr-2 h-4 w-4" /> Refresh Tips
-                  </>
-                ) : (
-                  <>
-                    <Brain className="mr-2 h-4 w-4" /> Get Tips
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {isFetchingTips && (
-              <div className="space-y-3 animate-pulse">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                    <div className="h-4 w-1/3 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
-                    <div className="h-3 w-full bg-gray-300 dark:bg-gray-600 rounded"></div>
-                    <div className="h-3 w-5/6 bg-gray-300 dark:bg-gray-600 rounded mt-1"></div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {tipsError && (
-              <Card className="bg-destructive/10 border-destructive">
-                <CardContent className="p-4 text-center">
-                  <AlertTriangle className="mx-auto h-8 w-8 text-destructive mb-2" />
-                  <p className="text-sm text-destructive-foreground">{tipsError}</p>
-                </CardContent>
-              </Card>
-            )}
-
-            {!isFetchingTips && !tipsError && aiCareTips.length > 0 && (
-              <div className="space-y-3">
-                {aiCareTips.map((tip, index) => (
-                  <Card key={index} className="bg-primary/5 dark:bg-primary/10 border-primary/20">
-                    <CardContent className="p-4">
-                      <h3 className="font-semibold text-primary mb-1 font-poppins">{tip.category}</h3>
-                      <p className="text-sm text-textColor dark:text-foreground">{tip.tip}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-            
-            {!isFetchingTips && !tipsError && aiCareTips.length === 0 && plant && (
-              <p className="text-sm text-muted-foreground text-center py-4">Click "Get Tips" to see AI-powered care advice for your {plant.name}.</p>
-            )}
-          </div>
-          
-          {/* Care History (placeholder for future implementation) */}
-          <Card className="bg-white dark:bg-card shadow-natural mb-6">
-            <CardContent className="p-6">
-              <h2 className="text-xl font-bold font-poppins mb-4">Care History</h2>
-              <p className="text-muted-foreground text-center py-6">
-                No care history recorded yet for this plant.
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"></div>
+            <div className="absolute bottom-0 left-0 p-6 md:p-8 w-full">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-1 tracking-tight font-poppins">
+                {perenualPlantDetails?.common_name || plant.name}
+              </h1>
+              <p className="text-md sm:text-lg text-gray-300 italic">
+                {perenualPlantDetails?.scientific_name?.join(', ') || 'Scientific name not available'}
               </p>
+            </div>
+            <div className="absolute top-4 right-4">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 bg-black/30 hover:bg-black/50 text-white">
+                    <MoreHorizontal className="h-5 w-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" align="end">
+                  <div className="flex flex-col space-y-1">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 text-sm h-9 font-normal"
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete Plant
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          {/* Quick Info Bar */}
+          <Card className="mb-8 shadow-lg bg-card dark:bg-gray-800/50">
+            <CardContent className="p-4 md:p-6">
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 text-sm">
+                {[ 
+                  { icon: Droplet, label: "Watering", value: perenualPlantDetails?.watering, color: "text-blue-500 dark:text-blue-400" },
+                  { icon: Sun, label: "Sunlight", value: Array.isArray(perenualPlantDetails?.sunlight) ? perenualPlantDetails.sunlight.join(', ') : perenualPlantDetails?.sunlight, color: "text-yellow-500 dark:text-yellow-400" },
+                  { icon: RefreshCcw, label: "Cycle", value: perenualPlantDetails?.cycle, color: "text-green-500 dark:text-green-400" },
+                  { icon: Globe, label: "Origin", value: perenualPlantDetails?.origin?.join(', '), color: "text-purple-500 dark:text-purple-400" }
+                ].map((item, index) => (
+                  item.value && (
+                    <div key={index} className="flex items-center space-x-3 p-3 bg-background/50 dark:bg-gray-700/30 rounded-lg">
+                      <item.icon className={`h-6 w-6 ${item.color}`} />
+                      <div>
+                        <p className="font-semibold text-foreground dark:text-gray-200">{item.label}</p>
+                        <p className="text-muted-foreground dark:text-gray-400 capitalize">{item.value}</p>
+                      </div>
+                    </div>
+                  )
+                ))}
+              </div>
             </CardContent>
           </Card>
+
+          {/* Tabs for Detailed Information */}
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mb-6 bg-card dark:bg-gray-800/50 p-1 rounded-lg shadow">
+              <TabsTrigger value="overview" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md hover:bg-muted/50 dark:hover:bg-gray-700/50 rounded-md transition-all">Overview</TabsTrigger>
+              <TabsTrigger value="care" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md hover:bg-muted/50 dark:hover:bg-gray-700/50 rounded-md transition-all">Care Guide</TabsTrigger>
+              <TabsTrigger value="characteristics" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md hover:bg-muted/50 dark:hover:bg-gray-700/50 rounded-md transition-all">Characteristics</TabsTrigger>
+              <TabsTrigger value="healthSafety" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md hover:bg-muted/50 dark:hover:bg-gray-700/50 rounded-md transition-all">Health & Safety</TabsTrigger>
+              <TabsTrigger value="aiTips" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md hover:bg-muted/50 dark:hover:bg-gray-700/50 rounded-md transition-all">AI Tips</TabsTrigger>
+            </TabsList>
+
+            {tabsConfigData.map(tab => (
+              <TabsContent key={tab.value} value={tab.value}>
+                <Card className="shadow-lg bg-card dark:bg-gray-800/50">
+                  <CardContent className="p-6">
+                    <div className="flex items-center mb-6">
+                      <tab.icon className="h-6 w-6 mr-3 text-primary" />
+                      <h3 className="text-2xl font-semibold font-poppins text-foreground dark:text-gray-100">{tab.title}</h3>
+                    </div>
+                    <div className="space-y-3 text-sm">
+                      {tab.content.map((item: TabDetailItem, idx) => (
+                        item.value && (
+                          <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-1 items-start">
+                            <p className="font-medium text-muted-foreground dark:text-gray-400 md:col-span-1">{item.label}:</p>
+                            <p className="text-foreground dark:text-gray-200 md:col-span-2 capitalize">
+                              {item.type === 'link' && item.href ? (
+                                <Button variant="link" asChild className="p-0 h-auto text-primary hover:underline">
+                                  <a href={item.href} target="_blank" rel="noopener noreferrer">View Guide</a>
+                                </Button>
+                              ) : item.value}
+                            </p>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            ))}
+
+            <TabsContent value="aiTips">
+              <Card className="shadow-lg bg-card dark:bg-gray-800/50">
+                <CardContent className="p-6">
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
+                    <div className="flex items-center">
+                      <Zap className="h-6 w-6 mr-3 text-primary" />
+                      <h3 className="text-2xl font-semibold font-poppins text-foreground dark:text-gray-100">AI Powered Care Tips</h3>
+                    </div>
+                    <Button onClick={fetchAiCareTips} disabled={isFetchingTips} size="sm" className="bg-accent hover:bg-accent-hover text-accent-foreground min-w-[150px]">
+                      {isFetchingTips ? (
+                        <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-4 w-4" />
+                      )}
+                      {isFetchingTips ? "Generating..." : aiCareTips.length > 0 ? "Regenerate Tips" : "Generate Tips"}
+                    </Button>
+                  </div>
+                  {isFetchingTips && aiCareTips.length === 0 && (
+                    <div className="text-center py-8">
+                      <RefreshCcw className="mx-auto h-10 w-10 animate-spin text-primary mb-3" />
+                      <p className="text-muted-foreground dark:text-gray-400">Fetching fresh tips, please wait...</p>
+                    </div>
+                  )}
+                  {tipsError && <p className="text-destructive text-sm bg-destructive/10 p-3 rounded-md">Error: {tipsError}</p>}
+                  {aiCareTips.length > 0 ? (
+                    <ul className="space-y-4">
+                      {aiCareTips.map((tip, index) => (
+                        <li key={index} className="p-4 bg-background/50 dark:bg-gray-700/30 rounded-lg shadow-sm border-l-4 border-primary">
+                          <strong className="font-semibold text-primary capitalize block mb-1">{tip.category}:</strong> 
+                          <p className="text-muted-foreground dark:text-gray-300">{tip.tip}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    !isFetchingTips && !tipsError && (
+                      <div className="text-center py-8 text-muted-foreground dark:text-gray-400">
+                        <ClipboardList className="mx-auto h-10 w-10 mb-3 opacity-50" />
+                        <p>No AI care tips available yet. Click the button above to generate them!</p>
+                      </div>
+                    )
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+
+          {/* Delete Confirmation Dialog (preserved) */}
+          <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <DialogContent className="bg-card dark:bg-gray-800">
+              <DialogHeader>
+                <DialogTitle className="text-foreground dark:text-gray-100">Are you sure you want to delete this plant?</DialogTitle>
+                <DialogDescription className="text-muted-foreground dark:text-gray-400">
+                  This action cannot be undone. This will permanently delete "{plant.name}" 
+                  and all its associated data.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="mt-4">
+                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting} className="dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={handleDeletePlant} disabled={isDeleting}>
+                  {isDeleting ? <RefreshCcw className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} 
+                  {isDeleting ? "Deleting..." : "Delete Plant"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
         </div>
       </main>
-      
-      {/* Mobile Navigation */}
       <MobileNavigation />
-      
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold font-poppins">Delete Plant</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete <span className="font-semibold">{plant.name}</span>? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-4">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsDeleteDialogOpen(false)}
-              disabled={isDeleting}
-            >
-              Cancel
-            </Button>
-            <Button 
-              className="bg-destructive hover:bg-destructive/90 text-white"
-              onClick={handleDeletePlant}
-              disabled={isDeleting}
-            >
-              {isDeleting ? "Deleting..." : "Delete Plant"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -15,6 +15,13 @@
       "when": 1748251112003,
       "tag": "0001_yellow_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1748509221380,
+      "tag": "0002_equal_toxin",
+      "breakpoints": true
     }
   ]
 }

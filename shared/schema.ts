@@ -27,11 +27,13 @@ export const plants = pgTable("plants", {
   status: text("status").default("healthy"),
   lastWatered: timestamp("last_watered"),
   waterFrequencyDays: integer("water_frequency_days"),
+  notes: text("notes"), // Text fields are nullable by default
 });
 
 // Create the base schema
 const basePlantSchema = createInsertSchema(plants).omit({
   id: true,
+  userId: true // Drizzle maps snake_case 'user_id' column to camelCase 'userId' key
 });
 
 // Create a modified schema with basic validation
@@ -43,6 +45,7 @@ export const insertPlantSchema = basePlantSchema.extend({
   status: z.string().optional().nullable(),
   lastWatered: z.coerce.date().optional().nullable(), // Allow null in addition to undefined
   waterFrequencyDays: z.number().int().positive().optional().nullable(),
+  notes: z.string().optional().nullable(),
 });
 
 // Environment readings schema

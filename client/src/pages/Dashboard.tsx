@@ -63,7 +63,7 @@ export default function Dashboard() {
     console.log('Plant added:', newPlant);
   };
 
-  const tasksToday = tasks?.filter(task => isToday(task.scheduledDate)).length || 0;
+  const tasksToday = tasks?.filter(task => isToday(task.dueDate)).length || 0;
   // const aiTip = recommendations && recommendations.length > 0 ? recommendations[0] : null; // Old way of getting tip
 
   // useEffect for fetching General AI Tip of the Day

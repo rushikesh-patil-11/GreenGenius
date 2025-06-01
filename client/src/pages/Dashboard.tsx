@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Added useEffect
 import { Plus, Thermometer, Droplet, Sun, Sprout, BarChartHorizontalBig, BrainCircuit, Leaf, Wind } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Sidebar from "@/components/layout/Sidebar";
@@ -10,8 +10,9 @@ import { usePlants } from "@/hooks/usePlants";
 import { useCareSchedule } from "@/hooks/useCareSchedule";
 import { useEnvironment } from "@/hooks/useEnvironment";
 import { useAuth } from "@clerk/clerk-react";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient"; // Added apiRequest
 import type { Plant } from "@shared/schema";
+import type { CareTask } from "@shared/schema"; // Assuming CareTask might be relevant for tip display or future use
 
 // Helper to check if a date is today
 const isToday = (someDate: string | Date) => {
@@ -46,8 +47,10 @@ const WeatherCard: React.FC<WeatherCardProps> = ({ icon: Icon, value, unit, labe
 );
 
 export default function Dashboard() {
-  const { userId: clerkUserId, isSignedIn } = useAuth();
+  const { userId: clerkUserId, isSignedIn, getToken } = useAuth(); // Added getToken
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
+  const [friendlyAiTip, setFriendlyAiTip] = useState<string | null>(null);
+  const [isLoadingTip, setIsLoadingTip] = useState<boolean>(false);
 
   const { stats, isLoading: isStatsLoading } = useDashboardStats({ enabled: !!isSignedIn && !!clerkUserId });
   const { plants, healthMetrics, isLoading: isPlantsLoading } = usePlants({ enabled: !!isSignedIn && !!clerkUserId });
@@ -61,7 +64,43 @@ export default function Dashboard() {
   };
 
   const tasksToday = tasks?.filter(task => isToday(task.scheduledDate)).length || 0;
-  const aiTip = recommendations && recommendations.length > 0 ? recommendations[0] : null;
+  // const aiTip = recommendations && recommendations.length > 0 ? recommendations[0] : null; // Old way of getting tip
+
+  // useEffect for fetching General AI Tip of the Day
+  useEffect(() => {
+    if (isSignedIn && getToken) { // General tip doesn't depend on plants list
+      const fetchGeneralAiTip = async () => {
+        setIsLoadingTip(true);
+        try {
+          const response = await apiRequest(
+            'GET', // Changed to GET
+            `/api/ai-general-tip`, // New endpoint for general tips
+            {
+              getToken: getToken, // Pass getToken for authentication
+              // No body needed for GET request to this endpoint
+            }
+          );
+
+          // The apiRequest function returns a Response object.
+          // We need to parse its JSON body to get the actual data.
+          const data = await response.json();
+
+          if (data && data.tip) {
+            setFriendlyAiTip(data.tip);
+          } else {
+            setFriendlyAiTip(data?.error || 'Could not fetch a general tip today. Check your connection or try again later.');
+          }
+        } catch (error) {
+          console.error("Failed to fetch general AI tip:", error);
+          setFriendlyAiTip("Oops! We couldn't fetch a general tip for you right now. Please try again.");
+        } finally {
+          setIsLoadingTip(false);
+        }
+      };
+
+      fetchGeneralAiTip();
+    }
+  }, [isSignedIn, getToken]);
 
   // Determine weather conditions text
   let weatherConditionText = "Clear";
@@ -179,12 +218,12 @@ export default function Dashboard() {
                   <BrainCircuit className="h-7 w-7 mr-3 text-purple-500" /> {/* Or Leaf icon */}
                   <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">AI Tip of the Day</h3>
                 </div>
-                {isEnvironmentLoading ? (
+                {isLoadingTip ? (
                   <p className="text-gray-500 dark:text-gray-400">Loading tip...</p>
-                ) : aiTip ? (
-                  <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{aiTip.message}</p>
+                ) : friendlyAiTip ? (
+                  <p className="text-base italic text-green-700 dark:text-green-400 leading-relaxed font-medium">🌱 {friendlyAiTip}</p>
                 ) : (
-                  <p className="text-sm text-gray-600 dark:text-gray-300">No tips available right now.</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-300">No tips available right now, or still loading plants.</p>
                 )}
               </div>
             </div>

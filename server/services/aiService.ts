@@ -1,25 +1,46 @@
 import Groq from "groq-sdk";
 import type { PlantData, EnvironmentData } from "../../shared/schema";
 
+// Helper function to calculate days since a given date
+function calculateDaysSince(dateString: string | Date | null | undefined): string {
+  if (dateString instanceof Date) {
+    // If it's already a Date object, use it directly
+    const today = new Date();
+    const differenceInTime = today.getTime() - dateString.getTime();
+    const differenceInDays = Math.floor(differenceInTime / (1000 * 3600 * 24));
+    if (differenceInDays < 0) return 'N/A (future date)';
+    if (differenceInDays === 0) return 'today';
+    if (differenceInDays === 1) return '1 day ago';
+    return `${differenceInDays} days ago`;
+  }
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  const today = new Date();
+  const differenceInTime = today.getTime() - date.getTime();
+  const differenceInDays = Math.floor(differenceInTime / (1000 * 3600 * 24));
+  if (differenceInDays < 0) return 'N/A (future date)'; // Should not happen for lastWatered
+  if (differenceInDays === 0) return 'today';
+  if (differenceInDays === 1) return '1 day ago';
+  return `${differenceInDays} days ago`;
+}
+
 // Initialize the Groq client with the API key from environment variables
 const groqApiKey = process.env.GROQ_API_KEY;
 
 if (!groqApiKey) {
-  console.warn(
-    "GROQ_API_KEY is not set. AI features will not work. Please add it to your .env file."
-  );
+  console.error("[aiService.ts] GROQ_API_KEY is not set. AI features will not work. Please add it to your .env file.");
+  const errorVal = JSON.stringify({ error: "AI service not configured." });
+  console.log('[aiService.ts] GROQ_API_KEY missing, returning:', errorVal);
 }
 
 const groq = groqApiKey ? new Groq({ apiKey: groqApiKey }) : null;
 const modelName = "llama3-8b-8192"; // Or consider "mixtral-8x7b-32768" for more complex tasks
 
-async function generateGroqCompletion(
-  prompt: string,
-  isJsonOutput: boolean = true
-): Promise<string | null> {
+async function generateGroqCompletion(prompt: string, expectJson: boolean): Promise<any> {
+  console.log('[aiService.ts] generateGroqCompletion: Called. Expecting JSON:', expectJson);
   if (!groq) {
     console.error("Groq client not initialized. Skipping AI completion.");
-    return null;
+    return expectJson ? { error: "AI service not configured" } : null;
   }
   try {
     const chatCompletion = await groq.chat.completions.create({
@@ -30,16 +51,33 @@ async function generateGroqCompletion(
         },
       ],
       model: modelName,
-      temperature: 0.7, // Adjust for creativity vs. determinism
-      max_tokens: 1024,  // Adjust based on expected output length
+      temperature: 0.7,
+      max_tokens: expectJson ? 2048 : 150, // Allow more tokens for JSON, less for plain text tips
       top_p: 1,
+      stop: null,
       stream: false,
-      ...(isJsonOutput ? { response_format: { type: "json_object" } } : {}),
     });
-    return chatCompletion.choices[0]?.message?.content || null;
+    console.log('[aiService.ts] generateGroqCompletion: Groq API call completed. Response:', chatCompletion);
+
+    const content = chatCompletion.choices[0]?.message?.content;
+    console.log('[aiService.ts] generateGroqCompletion: Extracted content:', content);
+
+    if (expectJson) {
+      try {
+        const parsedJson = JSON.parse(content || "{}");
+        console.log('[aiService.ts] generateGroqCompletion: Parsed JSON content:', parsedJson);
+        return parsedJson;
+      } catch (e) {
+        console.error("[aiService.ts] generateGroqCompletion: Failed to parse Groq JSON response:", e, "Raw content:", content);
+        return { error: "Failed to parse AI response" };
+      }
+    } else {
+      console.log('[aiService.ts] generateGroqCompletion: Returning text content:', content || null);
+      return content || null;
+    }
   } catch (error) {
-    console.error(`Error generating completion with Groq (${modelName}):`, error);
-    return null;
+    console.error("[aiService.ts] generateGroqCompletion: Error calling Groq API or processing its response:", error);
+    return expectJson ? { error: "AI service request failed" } : null;
   }
 }
 
@@ -119,65 +157,66 @@ export async function generateAiCareTips(
   plant: PlantData,
   weather: EnvironmentData, // Using EnvironmentData for weather as it comes from open-meteo
   season: string,
-  plantType: string // This could be plant.species or a broader category
-): Promise<Array<{ category: string; tip: string }>> {
+  taskType: string // e.g., "Watering", "Pruning", "Fertilizing"
+  // plantType: string, // This was from the old signature, can be removed or re-evaluated if needed
+): Promise<string | null> {
+  const daysSinceLastWatered = calculateDaysSince(plant.lastWatered);
+
   const prompt = `
-As an expert AI botanist, provide comprehensive and actionable plant care tips for the following plant, considering its specific type, the current weather conditions, and the season. Focus on practical advice the user can implement immediately.
+You are a smart plant care assistant.
 
-Plant Information:
-- Name: ${plant.name}
-- Species/Type: ${plantType}
-- Current watering frequency: ${plant.waterFrequencyDays ? `Every ${plant.waterFrequencyDays} days` : 'Unknown'}
-- Last watered: ${plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString() : 'Unknown'}
+Based on the following input, generate a short, friendly reminder to the user about plant care. Include the plant name, the task, and 1 useful tip. The tone should be warm and helpful.
 
-Weather Conditions:
-- Temperature: ${weather.temperature !== null && weather.temperature !== undefined ? `${weather.temperature}°C` : 'Not available'}
-- Humidity: ${weather.humidity !== null && weather.humidity !== undefined ? `${weather.humidity}%` : 'Not available'}
-- Soil Moisture (0-10cm): ${weather.soil_moisture_0_to_10cm !== null && weather.soil_moisture_0_to_10cm !== undefined ? `${weather.soil_moisture_0_to_10cm} m³/m³` : 'Not available'}
-
+Input:
+Plant: ${plant.name}
+Task: ${taskType}
+Last Watered: ${daysSinceLastWatered} (on ${plant.lastWatered ? new Date(plant.lastWatered).toLocaleDateString() : 'N/A'})
+Temperature: ${weather.temperature !== null && weather.temperature !== undefined ? `${weather.temperature}°C` : 'Not available'}
+Humidity: ${weather.humidity !== null && weather.humidity !== undefined ? `${weather.humidity}%` : 'Not available'}
 Season: ${season}
 
-Please provide 2-3 detailed care tips. For each tip, specify:
-1. A category (e.g., "Watering", "Sunlight", "Fertilizing", "Pest Control", "Temperature/Humidity Adjustment", "Seasonal Care")
-2. A concise, actionable tip (2-3 sentences maximum).
-
-Format your response as a valid JSON object containing a single key "tips" which is an array of objects, each with "category" and "tip" fields.
-Example:
-{
-  "tips": [
-    {"category": "Watering", "tip": "Given the current warm weather and ${plantType}'s needs, check soil moisture every 2 days. Water thoroughly when the top inch is dry."},
-    {"category": "Sunlight", "tip": "During this ${season}, ensure your ${plantType} receives at least 6 hours of indirect sunlight. An east-facing window would be ideal."},
-    {"category": "Fertilizing", "tip": "With the ${season} growth period, consider a balanced liquid fertilizer every 4 weeks for your ${plantType}." }
-  ]
-}
+Output:
+(The AI should generate the friendly reminder string here, similar to: 🌱 Hey there! Your ${plant.name} is ready for a drink today 🌞 It’s been ${daysSinceLastWatered} since the last watering and ${season.toLowerCase()} weather is here. Tip: Water deeply but infrequently – and avoid letting water sit in the center of the plant.)
 `;
 
-  const responseText = await generateGroqCompletion(prompt, true);
+  const responseText = await generateGroqCompletion(prompt, false); // Expect plain text output
 
   if (!responseText) {
-    return [
-      {
-        category: "General",
-        tip: "Unable to generate specific AI tips at this moment. Please ensure your plant's basic needs are met.",
-      },
-    ];
+    return `Could not generate an AI tip for your ${plant.name} regarding ${taskType.toLowerCase()} at this moment. Please check its needs manually.`;
   }
 
+  // The responseText is the direct friendly reminder string
+  const cleanedTip = responseText.trim().replace(/^"|"$/g, '');
+    console.log('[aiService.ts] generateGeneralDashboardTip: Returning cleaned tip:', cleanedTip);
+    return cleanedTip;
+}
+
+/**
+ * Generate a general AI-powered plant care tip for the dashboard using Groq AI
+ */
+export async function generateGeneralDashboardTip(
+  weather: EnvironmentData, // Using EnvironmentData for weather as it comes from open-meteo
+  season: string
+): Promise<string | null> {
+  console.log('[aiService.ts] generateGeneralDashboardTip: Called with weather:', weather, 'season:', season);
+  const prompt = `As a friendly plant care assistant, generate **only** one short, encouraging, and actionable general plant care tip (1-2 sentences) suitable for a dashboard. The tip should be applicable to a diverse collection of common household plants, not specific to any single plant. **Do not include any extra explanations, notes, or parenthetical text outside of the tip itself. Output only the tip text.** Current conditions: Temperature is ${weather.temperature}°C, Humidity is ${weather.humidity}%, Season is ${season}.`;
+  console.log('[aiService.ts] generateGeneralDashboardTip: Generated prompt:', prompt);
+
   try {
-    const parsedResponse = JSON.parse(responseText);
-     // Check if the response has the expected structure
-    if (parsedResponse && Array.isArray(parsedResponse.tips)) {
-        return parsedResponse.tips;
+    const responseText = await generateGroqCompletion(prompt, false); // false for plain text
+    console.log('[aiService.ts] generateGeneralDashboardTip: Received from generateGroqCompletion:', responseText);
+    if (!responseText || typeof responseText !== 'string') { // Added check for string type
+      const fallbackMsg = `Could not generate a general AI tip at this moment. Remember to check your plants' needs based on the current ${season.toLowerCase()} conditions!`;
+      console.log('[aiService.ts] generateGeneralDashboardTip: responseText is invalid or empty, returning fallback:', fallbackMsg);
+      return fallbackMsg;
     }
-    console.error("Unexpected JSON structure from Groq AI care tips:", parsedResponse);
-    return [{ category: "General", tip: "Received malformed advice. Please try again later." }];
-  } catch (parseError) {
-    console.error("Error parsing JSON from Groq AI care tips response:", parseError, responseText);
-    return [
-      {
-        category: "General",
-        tip: "Received complex advice. Please re-check your plant's environment and try again later.",
-      },
-    ];
+    const trimmedTip = responseText.trim();
+    console.log('[aiService.ts] generateGeneralDashboardTip: Returning trimmed tip:', trimmedTip);
+    return trimmedTip;
+  } catch (error) {
+    console.error("[aiService.ts] generateGeneralDashboardTip: Error during/after generateGroqCompletion:", error);
+    const errorMsg = `Failed to generate AI tip due to an internal error. Basic tip: Ensure your plants get appropriate light for the ${season.toLowerCase()}!`;
+    console.log('[aiService.ts] generateGeneralDashboardTip: Caught error, returning error message:', errorMsg);
+    return errorMsg;
   }
 }

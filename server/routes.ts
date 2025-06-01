@@ -15,19 +15,21 @@ import {
 } from "@shared/schema";
 import { ZodError } from "zod";
 import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
-import { generatePlantRecommendations, generateAiCareTips } from "./services/aiService"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
+import { generatePlantRecommendations, generateAiCareTips, generateGeneralDashboardTip } from "./services/aiService"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
 import fetch from 'node-fetch'; // Or your preferred HTTP client
 
-// Interfaces for Open-Meteo API response
-interface OpenMeteoCurrentWeather {
+// Interface for the expected OpenMeteo API response structure
+interface OpenMeteoCurrentData {
   temperature_2m: number | null;
   relative_humidity_2m: number | null;
   precipitation: number | null;
   weather_code: number | null;
-  // Add other fields if they are used or might be useful
+  wind_speed_10m: number | null;
 }
 
-interface OpenMeteoResponse {
+interface OpenMeteoApiResponse {
+  current?: OpenMeteoCurrentData;
+  // Add other top-level fields like 'daily' if needed elsewhere
   latitude: number;
   longitude: number;
   generationtime_ms: number;
@@ -43,7 +45,6 @@ interface OpenMeteoResponse {
     precipitation: string;
     weather_code: string;
   };
-  current?: OpenMeteoCurrentWeather; // Make current optional
 }
 
 // Helper function to determine season
@@ -169,7 +170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For now, let's send a specific error if weather fails, as it's crucial for the tips
         return res.status(503).json({ error: 'Failed to fetch weather data for care tips.' });
       }
-      const weatherData = await weatherResponse.json() as OpenMeteoResponse;
+      const weatherData = await weatherResponse.json() as OpenMeteoApiResponse;
       const currentWeatherData: EnvironmentData = {
         temperature: weatherData.current?.temperature_2m ?? null,
         humidity: weatherData.current?.relative_humidity_2m ?? null,
@@ -188,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
         lastWatered: plant.lastWatered,
       };
-      const aiTips = await generateAiCareTips(plantForAi, currentWeatherData, season, plantType);
+      const aiTipString = await generateAiCareTips(plantForAi, currentWeatherData, season, "General Plant Care");
 
       // Save the generated tips to the database
       const clerkUserId = req.auth.userId; // Clerk ID is a string
@@ -200,14 +201,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'User not found in local database.' });
       }
 
-      // Ensure aiTips is an array and has content before saving
-      if (Array.isArray(aiTips) && aiTips.length > 0) {
-        await storage.saveAiCareTips(plantId, user.id, aiTips);
+      let tipsToSaveAndReturn = [];
+      if (aiTipString && typeof aiTipString === 'string') {
+        tipsToSaveAndReturn.push({ category: "AI Reminder", tip: aiTipString });
+        // Assuming storage.saveAiCareTips expects an array of objects with category and tip
+        await storage.saveAiCareTips(plantId, user.id, tipsToSaveAndReturn);
       } else {
-        console.warn(`[AI Care Tips Route - Plant ID: ${req.params.id}] AI tips structure was not as expected or was empty, skipping save.`);
+        // Handle the case where aiTipString is null or not a string (e.g., AI generation failed)
+        // We can return an empty array or a specific message.
+        // For now, let's log and return an empty array to maintain structure if client expects array.
+        console.warn(`[AI Care Tips Route - Plant ID: ${req.params.id}] AI tip string was not generated, skipping save.`);
       }
 
-      return res.json(aiTips);
+      return res.json(tipsToSaveAndReturn);
 
     } catch (error) {
       return handleError(res, error, `[AI Care Tips Route - Plant ID: ${req.params.id}]`);
@@ -404,9 +410,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       return res.json(recommendations);
-
     } catch (error) {
-      return handleError(res, error, `[AI Plant Recommendations Route - Plant ID: ${req.params.id}]`);
+      return handleError(res, error, `[Recommendations Route - Plant ID: ${req.params.id}]`);
+    }
+  });
+
+  // New route for general AI-generated plant tip
+  app.get('/api/ai-general-tip', ClerkExpressRequireAuth(), async (req, res) => {
+    console.log('[routes.ts] /api/ai-general-tip: Route handler started.');
+    try {
+      if (!req.auth || !req.auth.userId) {
+        console.error('[routes.ts] /api/ai-general-tip: Unauthorized - User not authenticated.');
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for GET /api/ai-general-tip' });
+      }
+      console.log('[routes.ts] /api/ai-general-tip: User authenticated with Clerk ID:', req.auth.userId);
+
+      const weatherResponse = await fetch('https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&timezone=auto');
+      if (!weatherResponse.ok) {
+        console.error('[routes.ts] /api/ai-general-tip: Failed to fetch weather data. Status:', weatherResponse.status);
+        return res.status(503).json({ error: 'Failed to fetch weather data for AI tip.' });
+      }
+      const weatherData = await weatherResponse.json() as OpenMeteoApiResponse;
+      const currentWeatherData: EnvironmentData = {
+        temperature: weatherData.current?.temperature_2m ?? null,
+        humidity: weatherData.current?.relative_humidity_2m ?? null,
+        lightLevel: null, // EnvironmentData requires lightLevel; OpenMeteo current data doesn't provide it
+        soil_moisture_0_to_10cm: null, // Optional in EnvironmentData, keeping as null
+      };
+      const season = getSeason(new Date()); 
+      console.log('[routes.ts] /api/ai-general-tip: Fetched weather and season. Weather:', currentWeatherData, 'Season:', season);
+
+      console.log('[routes.ts] /api/ai-general-tip: Calling generateGeneralDashboardTip with weather:', currentWeatherData, 'season:', season);
+      const tip = await generateGeneralDashboardTip(currentWeatherData, season);
+      console.log('[routes.ts] /api/ai-general-tip: Received tip from service:', tip);
+
+      if (tip) {
+        console.log('[routes.ts] /api/ai-general-tip: Successfully generated tip. Sending JSON response:', { tip });
+        return res.json({ tip });
+      } else {
+        console.log('[routes.ts] /api/ai-general-tip: Tip generation failed or returned empty. Sending 503 JSON response.');
+        return res.status(503).json({ error: 'Could not generate an AI tip at this moment.' });
+      }
+    } catch (error) {
+      console.error('[routes.ts] /api/ai-general-tip: Error caught in route handler:', error);
+      return handleError(res, error, 'Failed to generate general AI tip');
     }
   });
 
@@ -606,52 +653,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!healthMetrics) {
         return res.status(404).json({ error: 'Plant health metrics not found' });
       }
-
       return res.json(healthMetrics);
     } catch (error) {
-      return handleError(res, error);
+      return handleError(res, error, 'Failed to get health metrics for plant ' + req.params.id);
     }
   });
 
-  // New GET route to fetch saved AI care tips
-  app.get('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req: any, res) => {
+  // GET route to fetch saved AI care tips
+  app.get('/api/plants/:id/ai-care-tips', ClerkExpressRequireAuth(), async (req, res) => {
+    console.log('[routes.ts] GET /api/plants/' + req.params.id + '/ai-care-tips - Route handler started.');
     try {
       if (!req.auth || !req.auth.userId) {
-        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
+        return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for GET /api/plants/:id/ai-care-tips' });
       }
-
       const plantId = parseInt(req.params.id);
       if (isNaN(plantId)) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
       const clerkUserId = req.auth.userId;
-      const user = await storage.getUserByClerkId(clerkUserId);
-
-      if (!user) {
+      const appUser = await storage.getUserByClerkId(clerkUserId);
+      if (!appUser || !appUser.id) {
         return res.status(404).json({ error: 'User not found in local database.' });
       }
 
-      const savedTips = await storage.getAiCareTips(plantId, user.id);
+      const savedTips = await storage.getAiCareTips(plantId, appUser.id); 
+      console.log('[routes.ts] GET /api/plants/' + plantId + '/ai-care-tips - Fetched tips:', savedTips);
       return res.json(savedTips);
-
     } catch (error) {
-      return handleError(res, error, `[Get AI Care Tips Route - Plant ID: ${req.params.id}]`);
+      console.error('[routes.ts] GET /api/plants/' + req.params.id + '/ai-care-tips - Error:', error);
+      return handleError(res, error, 'Failed to get AI care tips for plant ' + req.params.id);
     }
   });
 
+  // Basic login route (non-Clerk, for potential direct auth testing or legacy)
   app.post('/api/auth/login', async (req, res) => {
+    console.log('[routes.ts] POST /api/auth/login - Route handler started.');
     try {
       const { username, password } = req.body;
       if (!username || !password) {
         return res.status(400).json({ error: 'Username and password are required' });
       }
-
-      const user = await storage.getUserByUsername(username);
-      if (!user || user.password !== password) {
+      const user = await storage.getUserByUsername(username); 
+      if (!user || user.password !== password) { 
         return res.status(401).json({ error: 'Invalid credentials' });
       }
-
+      console.log('[routes.ts] POST /api/auth/login - User authenticated:', user.username);
       return res.json({ 
         id: user.id, 
         username: user.username,
@@ -659,9 +706,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: user.email
       });
     } catch (error) {
-      return handleError(res, error);
+      console.error('[routes.ts] POST /api/auth/login - Error:', error);
+      return handleError(res, error, 'Login failed');
     }
   });
+
 
   // Environment readings routes
   app.get('/api/environment', ClerkExpressRequireAuth(), async (req: any, res) => {

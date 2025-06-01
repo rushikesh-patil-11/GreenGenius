@@ -28,7 +28,7 @@ export default function Landing() {
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             Transform your home into a thriving garden with intelligent plant
-            management, personalized care schedules, and AI-driven
+            management, and AI-driven
             recommendations.
           </p>
           <Button
@@ -86,7 +86,7 @@ export default function Landing() {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">
-                  Customized care schedules based on each plant's specific
+                  Customized care based on each plant's specific
                   needs, season, and environmental conditions.
                 </p>
               </CardContent>

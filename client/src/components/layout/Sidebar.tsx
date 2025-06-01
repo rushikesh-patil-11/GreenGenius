@@ -52,11 +52,7 @@ export function Sidebar() {
             icon={<Leaf className="text-xl" />} 
             label="My Plants" 
           />
-          <NavItem 
-            path="/schedule" 
-            icon={<Calendar className="text-xl" />} 
-            label="Care Schedule" 
-          />
+
           <NavItem 
             path="/history" 
             icon={<Clock className="text-xl" />} 

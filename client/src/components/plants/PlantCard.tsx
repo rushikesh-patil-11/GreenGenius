@@ -54,7 +54,7 @@ export function PlantCard({ plant }: PlantCardProps) {
             <span className="text-sm text-muted-foreground">
               {plant.watering_general_benchmark && typeof plant.watering_general_benchmark === 'object' && 'value' in plant.watering_general_benchmark && 'unit' in plant.watering_general_benchmark ? 
                 `${plant.watering_general_benchmark.value} ${plant.watering_general_benchmark.unit}` : 
-                plant.waterFrequencyDays ? `Every ${plant.waterFrequencyDays} days` : "Unknown"}
+                plant.waterFrequencyDays ? `Every ${plant.waterFrequencyDays} days` : "Varies based on season"}
             </span>
           </div>
           
@@ -64,7 +64,7 @@ export function PlantCard({ plant }: PlantCardProps) {
             </span>
             <span className="text-sm text-muted-foreground">
               {plant.sunlight && plant.sunlight.length > 0 ? 
-                plant.sunlight[0] : "Not specified"}
+                plant.sunlight[0] : "Moderate light"}
             </span>
           </div>
           
@@ -73,7 +73,7 @@ export function PlantCard({ plant }: PlantCardProps) {
               <Sparkles className="text-primary mr-2 h-4 w-4" /> Care Level
             </span>
             <span className="text-sm text-muted-foreground">
-              {plant.care_level || "Standard"}
+              {plant.care_level || "Moderate care"}
             </span>
           </div>
           
@@ -82,7 +82,7 @@ export function PlantCard({ plant }: PlantCardProps) {
               <Calendar className="text-success mr-2 h-4 w-4" /> In Collection
             </span>
             <span className="text-sm text-muted-foreground">
-              {plantAge}
+              {plantAge !== "Unknown" ? plantAge : "Recently added"}
             </span>
           </div>
         </div>
@@ -92,11 +92,15 @@ export function PlantCard({ plant }: PlantCardProps) {
             <Clock className="h-4 w-4 text-secondary mr-2" />
             <div className="text-sm">
               <span className="text-muted-foreground">Water </span>
-              <span 
-                className={`font-medium ${nextWatering === 'Today!' ? 'text-destructive' : 'text-textColor dark:text-foreground'}`}
-              >
-                {nextWatering}
-              </span>
+              {nextWatering === 'Unknown' ? (
+                <span className="font-medium text-textColor dark:text-foreground">when soil is dry</span>
+              ) : (
+                <span 
+                  className={`font-medium ${nextWatering === 'Today!' ? 'text-destructive' : 'text-textColor dark:text-foreground'}`}
+                >
+                  {nextWatering}
+                </span>
+              )}
             </div>
           </div>
           <Link href={`/plants/${plant.id}`}>

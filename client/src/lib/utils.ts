@@ -28,8 +28,8 @@ export function calculateNextWateringDate(lastWatered: Date | string, frequencyD
   return addDays(lastWateredDate, frequencyDays);
 }
 
-export function formatNextWatering(lastWatered: Date | string, frequencyDays: number): string {
-  if (!lastWatered || !frequencyDays) return 'Not set';
+export function formatNextWatering(lastWatered: Date | string | null | undefined, frequencyDays: number | null | undefined): string {
+  if (!lastWatered || !frequencyDays) return 'Unknown';
   
   const nextWateringDate = calculateNextWateringDate(lastWatered, frequencyDays);
   const today = new Date();

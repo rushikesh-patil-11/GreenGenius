@@ -55,7 +55,7 @@ export default function Dashboard() {
 
   const { stats, isLoading: isStatsLoading } = useDashboardStats({ enabled: !!isSignedIn && !!clerkUserId });
   const { plants, healthMetrics, isLoading: isPlantsLoading } = usePlants({ enabled: !!isSignedIn && !!clerkUserId });
-  const { tasks, isLoading: isTasksLoading } = useCareSchedule({ enabled: !!isSignedIn && !!clerkUserId });
+  const { tasks, isLoading: isTasksLoading, skipTask, completeTask } = useCareSchedule({ enabled: !!isSignedIn && !!clerkUserId });
   const { environmentData, recommendations, isLoading: isEnvironmentLoading } = useEnvironment({ enabled: !!isSignedIn && !!clerkUserId });
 
   const handleAddPlant = (newPlant: Plant) => {
@@ -200,19 +200,67 @@ export default function Dashboard() {
               {/* Today's Tasks Card */}
               <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-lg flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center mb-3">
-                    <Sprout className="h-7 w-7 mr-3 text-green-500" />
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Today's Tasks</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center">
+                      <Sprout className="h-7 w-7 mr-3 text-green-500" />
+                      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Today's Tasks</h3>
+                    </div>
+                    {/* Time display removed as requested */}
                   </div>
+                  
                   {isTasksLoading ? (
                     <AppLoader title="Loading Tasks" message="Fetching your care tasks..." size="small" variant="minimal" />
-                  ) : tasksToday > 0 ? (
-                    <p className="text-2xl font-bold text-red-500">{tasksToday} <span className="text-sm font-normal text-gray-600 dark:text-gray-300">plant(s) need attention</span></p>
+                  ) : tasks && tasks.length > 0 ? (
+                    <div className="space-y-3 mt-2">
+                      {tasks.map((task) => (
+                        <div 
+                          key={task.id} 
+                          className={task.taskType === 'water' ? "bg-white p-4 rounded-2xl text-gray-800 shadow" : "bg-[#1e2141] p-4 rounded-2xl text-white"}
+                        >
+                          <div className="flex items-center mb-1">
+                            <div className="flex items-center">
+                              {task.taskType === 'water' ? (
+                                <Droplet className="h-5 w-5 mr-2 text-blue-500" />
+                              ) : task.taskType === 'prune' ? (
+                                <Leaf className="h-5 w-5 mr-2 text-green-300" />
+                              ) : (
+                                <Sprout className="h-5 w-5 mr-2 text-green-300" />
+                              )}
+                              <h4 className="font-medium">
+                                {task.taskType === 'water' ? 'Water the Plant' : 
+                                 task.taskType === 'prune' ? 'Cut the leaves' : 
+                                 task.taskType === 'fertilize' ? 'Add Fertilizer' : task.taskType}
+                              </h4>
+                            </div>
+                          </div>
+                          
+                          <p className={task.taskType === 'water' ? "text-sm text-gray-500 mb-3" : "text-sm text-gray-200 opacity-90 mb-3"}>
+                            {task.plantName ? task.plantName : 'Your plant'}
+                          </p>
+                          
+                          <div className="flex justify-between mt-2">
+                            <button 
+                              onClick={() => skipTask.mutate(task.id)}
+                              className={task.taskType === 'water' ? 
+                                "flex items-center justify-center px-3 py-1.5 bg-transparent border border-gray-400 text-sm font-medium rounded-md text-gray-600 opacity-80 hover:opacity-100 transition-opacity" :
+                                "flex items-center justify-center px-3 py-1.5 bg-transparent border border-gray-500 text-sm font-medium rounded-md text-white opacity-80 hover:opacity-100 transition-opacity"}
+                            >
+                              <span className="mr-1">✕</span> Skip
+                            </button>
+                            <button 
+                              onClick={() => completeTask.mutate(task.id)}
+                              className="flex items-center justify-center px-3 py-1.5 bg-green-600 hover:bg-green-700 text-sm font-medium rounded-md text-white transition-colors"
+                            >
+                              <span className="mr-1">✓</span> Done
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="text-gray-600 dark:text-gray-300">All caught up! 🎉</p>
+                    <p className="text-gray-600 dark:text-gray-300 mt-4">No tasks for today! Add some plants to get care tasks.</p>
                   )}
                 </div>
-                {/* <Button variant="link" className="mt-4 text-green-600 dark:text-green-400 self-start px-0">View Tasks</Button> */}
               </div>
 
               {/* Plant Collection Card */}

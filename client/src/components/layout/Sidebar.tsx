@@ -13,7 +13,7 @@ export function Sidebar() {
       "group flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ease-in-out",
       isActive(path)
         ? "bg-primary/20 text-primary font-semibold shadow-sm"
-        : "text-gray-300 hover:bg-gray-800/50 hover:text-primary/90"
+        : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800/50 hover:text-primary/90"
     );
 
   const NavItem = ({
@@ -59,13 +59,13 @@ export function Sidebar() {
 
   return (
     <motion.aside 
-      className="fixed left-0 top-0 h-full w-64 bg-[#0f172a] backdrop-blur-md border-r border-gray-800/30 shadow-xl z-20"
+      className="fixed left-0 top-0 h-full w-64 bg-white dark:bg-slate-900 backdrop-blur-md border-r border-gray-200 dark:border-gray-800/30 shadow-xl z-20"
       initial={{ x: -100, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
     >
       <motion.div 
-        className="flex items-center justify-between h-20 border-b border-gray-800/30 px-6"
+        className="flex items-center justify-between h-20 border-b border-gray-200 dark:border-gray-800/30 px-6"
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
@@ -90,7 +90,7 @@ export function Sidebar() {
             <h1 className="text-xl font-bold font-poppins bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
               GreenGenius
             </h1>
-            <p className="text-xs text-gray-400 font-medium -mt-1">Plant Care Assistant</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium -mt-1">Plant Care Assistant</p>
           </div>
         </div>
       </motion.div>
@@ -101,7 +101,7 @@ export function Sidebar() {
           <NavItem path="/history" icon={<Clock className="w-5 h-5" />} label="Care History" />
         </div>
         <motion.div 
-          className="pt-6 mt-6 border-t border-gray-800/30"
+          className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-800/30"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}

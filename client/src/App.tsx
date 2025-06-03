@@ -64,10 +64,10 @@ const ThemeToggleButton: React.FC = () => {
   return (
     <button 
       onClick={toggleTheme} 
-      className="p-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-colors duration-200 flex items-center justify-center"
+      className="p-2 rounded-full bg-gray-200 dark:bg-gray-800/50 hover:bg-gray-300 dark:hover:bg-gray-700/50 transition-colors duration-200 flex items-center justify-center"
       aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
     >
-      {theme === 'light' ? <Moon size={18} className="text-gray-200" /> : <Sun size={18} className="text-yellow-300" />}
+      {theme === 'light' ? <Moon size={18} className="text-gray-700" /> : <Sun size={18} className="text-yellow-300" />}
     </button>
   );
 };
@@ -90,7 +90,7 @@ function App() {
       <CustomThemeProvider> {/* Our custom theme provider wraps everything */} 
         <ShadcnThemeProvider defaultTheme="light"> {/* Existing theme provider from Shadcn/hooks */} 
           <TooltipProvider>
-            <header className="bg-[#0f172a] text-white px-6 py-4 flex justify-between items-center gap-4 border-b border-gray-800/30 shadow-md">
+            <header className="bg-white dark:bg-slate-900 text-gray-800 dark:text-white px-6 py-4 flex justify-between items-center gap-4 border-b border-gray-200 dark:border-gray-800/30 shadow-md">
               <div className="flex items-center">
                 <div className="relative mr-2">
                   <div className="absolute -inset-1 bg-gradient-to-r from-primary/40 to-primary/20 rounded-full blur-md"></div>
@@ -100,14 +100,14 @@ function App() {
                   <h1 className="text-xl font-bold font-poppins bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                     GreenGenius
                   </h1>
-                  <p className="text-xs text-gray-400 font-medium -mt-1">Plant Care Assistant</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium -mt-1">Plant Care Assistant</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
                 <ThemeToggleButton /> {/* Add the toggle button here */}
                 <SignedOut>
                 {/* @ts-ignore TODO: Investigate Clerk types for afterSignInUrl/afterSignUpUrl on SignInButton */}
-                <SignInButton afterSignInUrl="/dashboard" afterSignUpUrl="/dashboard" mode="modal" className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200" />
+                <SignInButton afterSignInUrl="/dashboard" afterSignUpUrl="/dashboard" mode="modal" className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-white text-sm font-medium transition-colors duration-200" />
                 {/* @ts-ignore TODO: Investigate Clerk types for afterSignInUrl/afterSignUpUrl on SignUpButton */}
                 <SignUpButton afterSignInUrl="/dashboard" afterSignUpUrl="/dashboard" mode="modal" className="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-white text-sm font-medium transition-colors duration-200" />
               </SignedOut>

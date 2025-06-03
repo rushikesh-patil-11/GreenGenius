@@ -115,6 +115,27 @@ export default function Dashboard() {
   if (weatherConditionText === "Cold" || weatherConditionText === "Hot") WeatherConditionIcon = Thermometer; // Or Wind
 
 
+  // Check if all main data is loading, but only after authentication is complete
+  const isLoading = isSignedIn && clerkUserId && (isPlantsLoading || isStatsLoading || isEnvironmentLoading || isTasksLoading);
+
+  // Main loading state for the entire dashboard - only show after authentication is verified
+  if (isSignedIn && clerkUserId && isLoading) {
+    return (
+      <div className="flex h-screen bg-emerald-50 dark:bg-gray-900">
+        <Sidebar />
+        <main className="main-content flex-1 overflow-y-auto pb-20 bg-emerald-50 dark:bg-gray-900 flex items-center justify-center">
+          <AppLoader 
+            title="Loading Dashboard" 
+            message="Gathering all your plant data and insights..." 
+            size="large" 
+            variant="default"
+          />
+        </main>
+        <MobileNavigation />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-emerald-50 dark:bg-gray-900">
       <Sidebar />

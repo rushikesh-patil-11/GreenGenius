@@ -1,78 +1,115 @@
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { Leaf, Home, Droplet, Calendar, Clock, Lightbulb, Settings } from "lucide-react";
+import { Leaf, Home, Clock, Lightbulb, Settings } from "lucide-react";
+import { motion } from "framer-motion";
 
 export function Sidebar() {
   const [location] = useLocation();
 
-  const isActive = (path: string) => {
-    return location === path;
-  };
+  const isActive = (path: string) => location === path;
 
-  const linkClass = (path: string) => {
-    return cn(
-      "flex items-center p-3 rounded-lg transition-colors cursor-pointer",
+  const linkClass = (path: string) =>
+    cn(
+      "group flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ease-in-out",
       isActive(path)
-        ? "text-textColor bg-primary/10"
-        : "text-textColor hover:bg-gray-100 dark:hover:bg-gray-800"
+        ? "bg-primary/15 text-primary font-semibold shadow-sm"
+        : "text-gray-600 dark:text-gray-400 hover:bg-muted/30 dark:hover:bg-muted/20 hover:text-primary/80 dark:hover:text-primary/80"
     );
-  };
 
-  // Navigation item component to avoid nested anchor tags
-  const NavItem = ({ path, icon, label }: { path: string, icon: React.ReactNode, label: string }) => {
+  const NavItem = ({
+    path,
+    icon,
+    label,
+  }: {
+    path: string;
+    icon: React.ReactNode;
+    label: string;
+  }) => {
     const handleClick = () => {
       window.location.href = path;
     };
     
+    const active = isActive(path);
+
     return (
-      <div onClick={handleClick} className={linkClass(path)}>
-        {icon}
-        <span className="ml-3 font-medium font-poppins">{label}</span>
-      </div>
+      <motion.button
+        onClick={handleClick}
+        className={linkClass(path)}
+        aria-label={label}
+        whileTap={{ scale: 0.98 }}
+        whileHover={{ x: 2 }}
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      >
+        <div className={cn(
+          "relative p-1 rounded-full transition-all", 
+          active ? "bg-primary/10" : ""
+        )}>
+          {icon}
+
+        </div>
+        <span className={cn(
+          "font-medium font-poppins transition-all",
+          active ? "font-semibold" : ""
+        )}>{label}</span>
+      </motion.button>
     );
   };
 
   return (
-    <aside className="desktop-sidebar fixed w-64 h-full bg-white dark:bg-card shadow-natural z-10">
-      <div className="flex items-center justify-center h-20 border-b border-gray-100 dark:border-gray-800">
-        <div className="flex items-center">
-          <Leaf className="text-primary text-3xl" />
-          <h1 className="ml-2 text-2xl font-bold font-poppins text-textColor dark:text-foreground">PlantPal</h1>
+    <motion.aside 
+      className="fixed left-0 top-0 h-full w-64 bg-background/95 backdrop-blur-md border-r border-border/50 shadow-xl z-20"
+      initial={{ x: -100, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+    >
+      <motion.div 
+        className="flex items-center h-20 border-b border-border/50 px-6"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div className="relative">
+          <motion.div 
+            className="absolute -inset-1 bg-gradient-to-r from-primary/30 to-primary/10 rounded-full blur-md"
+            animate={{ 
+              scale: [1, 1.1, 1],
+              opacity: [0.7, 0.9, 0.7] 
+            }}
+            transition={{ 
+              duration: 3, 
+              repeat: Infinity,
+              repeatType: "reverse" 
+            }}
+          />
+          <Leaf className="text-primary text-3xl relative z-10" />
         </div>
-      </div>
-      <nav className="px-4 pt-6">
-        <div className="space-y-4">
-          <NavItem 
-            path="/dashboard" 
-            icon={<Home className="text-primary text-xl" />} 
-            label="Dashboard" 
-          />
-          <NavItem 
-            path="/plants" 
-            icon={<Leaf className="text-xl" />} 
-            label="My Plants" 
-          />
-
-          <NavItem 
-            path="/history" 
-            icon={<Clock className="text-xl" />} 
-            label="Care History" 
-          />
-          <NavItem 
-            path="/recommendations" 
-            icon={<Lightbulb className="text-xl" />} 
-            label="AI Recommendations" 
+        <h1 className="ml-3 text-2xl font-bold font-poppins bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+          PlantPal
+        </h1>
+      </motion.div>
+      <nav className="px-4 py-6 space-y-6">
+        <div className="space-y-2">
+          <NavItem path="/dashboard" icon={<Home className="w-5 h-5" />} label="Dashboard" />
+          <NavItem path="/plants" icon={<Leaf className="w-5 h-5" />} label="My Plants" />
+          <NavItem path="/history" icon={<Clock className="w-5 h-5" />} label="Care History" />
+          <NavItem
+            path="/recommendations"
+            icon={<Lightbulb className="w-5 h-5" />}
+            label="AI Recommendations"
           />
         </div>
-        <div className="absolute bottom-0 left-0 right-0 p-4">
-          <NavItem 
-            path="/settings" 
-            icon={<Settings className="text-xl" />} 
-            label="Settings" 
-          />
-        </div>
+        <motion.div 
+          className="pt-6 mt-6 border-t border-border/50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <NavItem path="/settings" icon={<Settings className="w-5 h-5" />} label="Settings" />
+        </motion.div>
       </nav>
-    </aside>
+    </motion.aside>
   );
 }
 

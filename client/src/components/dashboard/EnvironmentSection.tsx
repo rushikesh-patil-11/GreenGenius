@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Thermometer, Droplet, Gauge } from "lucide-react";
 import { getEnvironmentStatus } from "@/lib/utils";
+import AppLoader from "@/components/ui/AppLoader";
 import type { EnvironmentReading as SharedEnvironmentReading } from "@shared/schema";
 
 interface EnvironmentSectionProps {
@@ -23,19 +24,13 @@ export function EnvironmentSection({
               Environment Conditions
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[...Array(3)].map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center p-4 border border-gray-100 dark:border-gray-800 rounded-lg animate-pulse"
-              >
-                <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-full mr-4"></div>
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
-                  <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
-                </div>
-              </div>
-            ))}
+          <div className="flex justify-center items-center py-6">
+            <AppLoader 
+              title="Loading Environment Data" 
+              message="Fetching your environmental conditions..." 
+              size="medium" 
+              variant="default"
+            />
           </div>
         </CardContent>
       </Card>

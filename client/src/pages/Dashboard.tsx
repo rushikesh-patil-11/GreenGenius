@@ -11,6 +11,7 @@ import { useCareSchedule } from "@/hooks/useCareSchedule";
 import { useEnvironment } from "@/hooks/useEnvironment";
 import { useAuth } from "@clerk/clerk-react";
 import { queryClient, apiRequest } from "@/lib/queryClient"; // Added apiRequest
+import AppLoader from "@/components/ui/AppLoader";
 import type { Plant } from "@shared/schema";
 import type { CareTask } from "@shared/schema"; // Assuming CareTask might be relevant for tip display or future use
 
@@ -183,7 +184,7 @@ export default function Dashboard() {
                     <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Today's Tasks</h3>
                   </div>
                   {isTasksLoading ? (
-                    <p className="text-gray-500 dark:text-gray-400">Loading tasks...</p>
+                    <AppLoader title="Loading Tasks" message="Fetching your care tasks..." size="small" variant="minimal" />
                   ) : tasksToday > 0 ? (
                     <p className="text-2xl font-bold text-red-500">{tasksToday} <span className="text-sm font-normal text-gray-600 dark:text-gray-300">plant(s) need attention</span></p>
                   ) : (
@@ -200,7 +201,7 @@ export default function Dashboard() {
                   <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Plant Collection</h3>
                 </div>
                 {isStatsLoading ? (
-                    <p className="text-gray-500 dark:text-gray-400">Loading stats...</p>
+                    <AppLoader title="Loading Stats" message="Fetching your plant collection stats..." size="small" variant="minimal" />
                   ) : (
                   <p className="text-2xl font-bold text-gray-700 dark:text-gray-200">{stats?.totalPlants || 0} <span className="text-sm font-normal text-gray-600 dark:text-gray-300">plants total</span></p>
                 )}
@@ -219,7 +220,7 @@ export default function Dashboard() {
                   <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">AI Tip of the Day</h3>
                 </div>
                 {isLoadingTip ? (
-                  <p className="text-gray-500 dark:text-gray-400">Loading tip...</p>
+                  <AppLoader title="Loading Tip" message="Generating your daily plant care tip..." size="small" variant="minimal" />
                 ) : friendlyAiTip ? (
                   <p className="text-base italic text-green-700 dark:text-green-400 leading-relaxed font-medium">🌱 {friendlyAiTip}</p>
                 ) : (

@@ -6,6 +6,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { queryClient } from "@/lib/queryClient";
+import AppLoader from "@/components/ui/AppLoader";
 
 interface AIRecommendationsProps {
   recommendations: Recommendation[];
@@ -88,21 +89,13 @@ export function AIRecommendations({ recommendations, onApplyRecommendation, load
             <h2 className="text-xl font-bold font-poppins text-textColor dark:text-foreground">AI Care Recommendations</h2>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-            {[...Array(2)].map((_, i) => (
-              <div key={i} className="bg-white dark:bg-card rounded-lg p-4 shadow-sm">
-                <div className="animate-pulse flex space-x-4">
-                  <div className="rounded-full bg-gray-200 dark:bg-gray-700 h-10 w-10"></div>
-                  <div className="flex-1 space-y-4 py-1">
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-                    <div className="space-y-2">
-                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                      <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="flex justify-center items-center py-8">
+            <AppLoader 
+              title="Loading AI Recommendations" 
+              message="Gathering intelligent care suggestions for your plants..." 
+              size="medium" 
+              variant="default"
+            />
           </div>
         </CardContent>
       </Card>

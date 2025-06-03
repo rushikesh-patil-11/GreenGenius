@@ -197,13 +197,13 @@ export default function PlantDetails() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen bg-background">
-        <Sidebar />
-        <main className="main-content flex-1 overflow-y-auto pb-16">
-          <div className="p-6 md:p-8">
-            <AppLoader title="Gathering Plant Wisdom..." message="We're fetching the freshest details. This might take a moment." />
-          </div>
-        </main>
+      <div className="container py-12 flex justify-center items-center min-h-[50vh]">
+        <AppLoader 
+          title="Loading Plant Details" 
+          message="Gathering information about your plant..." 
+          size="large" 
+          variant="default"
+        />
         <MobileNavigation />
       </div>
     );

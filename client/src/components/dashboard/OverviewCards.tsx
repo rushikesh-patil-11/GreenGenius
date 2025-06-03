@@ -1,5 +1,6 @@
 import { Leaf, Droplet, Heart, Calendar, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import AppLoader from "@/components/ui/AppLoader";
 
 interface OverviewStats {
   totalPlants: number;
@@ -18,18 +19,13 @@ interface OverviewCardsProps {
 export function OverviewCards({ stats, loading = false }: OverviewCardsProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {[...Array(4)].map((_, i) => (
-          <Card key={i} className="bg-white dark:bg-card shadow-natural">
-            <CardContent className="p-6">
-              <div className="h-24 animate-pulse flex flex-col justify-between">
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
-                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-2"></div>
-                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="flex justify-center items-center py-8">
+        <AppLoader 
+          title="Loading Dashboard Stats" 
+          message="Gathering your plant statistics..." 
+          size="medium" 
+          variant="default"
+        />
       </div>
     );
   }

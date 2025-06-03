@@ -52,6 +52,30 @@ export default function Plants() {
     return true;
   });
 
+  if (isLoading) {
+    return (
+      <div className="container py-8">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">My Plants</h1>
+          <Button 
+            className="bg-primary hover:bg-primary-light text-white"
+            onClick={handleOpenAddPlantModal}
+          >
+            <Plus className="mr-2 h-4 w-4" /> Add Plant
+          </Button>
+        </div>
+        <div className="flex justify-center items-center py-12">
+          <AppLoader 
+            title="Loading Your Garden" 
+            message="Gathering information about your plants..." 
+            size="large" 
+            variant="default"
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-background">
       {/* Desktop Sidebar */}
@@ -118,9 +142,7 @@ export default function Plants() {
           </div>
           
           {/* Plants Grid */}
-          {isLoading ? (
-            <AppLoader title="Loading Your Garden..." message="Fetching your plant collection. Please wait." />
-          ) : filteredPlants.length === 0 ? (
+          {filteredPlants.length === 0 ? (
             <div className="text-center py-16 bg-white dark:bg-card rounded-lg shadow-natural">
               {searchQuery ? (
                 <>

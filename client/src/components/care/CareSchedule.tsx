@@ -1,13 +1,16 @@
 import { useState } from "react";
-import { CareTask } from "@shared/schema";
-import { Card, CardContent } from "@/components/ui/card";
+import { ChevronRight } from "lucide-react";
+import { Link } from "react-router-dom";
+
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
-import { formatRelativeDate } from "@/lib/utils";
-import { Droplet, Scissors, Check, X, ChevronRight } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { useToast } from "@/components/ui/use-toast";
+import AppLoader from "@/components/ui/AppLoader";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import type { CareTask } from "@shared/schema";
+import { Droplet, Scissors, Check, X } from "lucide-react";
+import { formatRelativeDate } from "@/lib/utils";
 
 interface CareScheduleProps {
   tasks: CareTask[];
@@ -74,25 +77,13 @@ export function CareSchedule({ tasks, loading = false }: CareScheduleProps) {
   if (loading) {
     return (
       <Card className="bg-white dark:bg-card shadow-natural mb-8">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-6 animate-pulse">
-            <div className="h-6 w-48 bg-gray-200 dark:bg-gray-700 rounded"></div>
-            <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
-          </div>
-          
-          <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center p-3 border border-gray-100 dark:border-gray-800 rounded-lg animate-pulse">
-                <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full mr-4"></div>
-                <div className="flex-1">
-                  <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-2"></div>
-                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
-                </div>
-                <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full mr-2"></div>
-                <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
-              </div>
-            ))}
-          </div>
+        <CardContent className="p-6 flex justify-center items-center py-12">
+          <AppLoader 
+            title="Loading Care Schedule" 
+            message="Preparing your plant care tasks..." 
+            size="medium" 
+            variant="default"
+          />
         </CardContent>
       </Card>
     );
@@ -104,7 +95,7 @@ export function CareSchedule({ tasks, loading = false }: CareScheduleProps) {
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold font-poppins text-textColor dark:text-foreground">Upcoming Care Tasks</h2>
-            <Link href="/schedule">
+            <Link to="/schedule">
               <Button variant="link" className="text-secondary">
                 View Full Schedule <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
@@ -127,7 +118,7 @@ export function CareSchedule({ tasks, loading = false }: CareScheduleProps) {
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold font-poppins text-textColor dark:text-foreground">Upcoming Care Tasks</h2>
-          <Link href="/schedule">
+          <Link to="/schedule">
             <Button variant="link" className="text-secondary">
               View Full Schedule <ChevronRight className="h-4 w-4 ml-1" />
             </Button>

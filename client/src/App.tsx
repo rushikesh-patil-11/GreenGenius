@@ -21,6 +21,7 @@ import {
   useUser,
 } from "@clerk/clerk-react";
 import { Sun, Moon, Leaf } from 'lucide-react'; // Import icons
+import path from "path";
 
 const ProtectedRoute: React.FC<{ component: React.ComponentType<any>; path: string }> = ({ component: Component, path, ...rest }) => {
   const { isSignedIn, isLoaded } = useUser();
@@ -64,21 +65,10 @@ const ThemeToggleButton: React.FC = () => {
   return (
     <button 
       onClick={toggleTheme} 
-      style={{
-        padding: '0.5rem',
-        // Basic styling, can be improved with CSS variables or Tailwind
-        backgroundColor: 'transparent', // Make background transparent for icon button
-        color: 'var(--text-color)', // Use text color for icon
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}
-      aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} // Accessibility
+      className="p-2 rounded-full bg-gray-800/50 hover:bg-gray-700/50 transition-colors duration-200 flex items-center justify-center"
+      aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
     >
-      {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+      {theme === 'light' ? <Moon size={18} className="text-gray-200" /> : <Sun size={18} className="text-yellow-300" />}
     </button>
   );
 };
@@ -102,23 +92,36 @@ function App() {
       <CustomThemeProvider> {/* Our custom theme provider wraps everything */} 
         <ShadcnThemeProvider defaultTheme="light"> {/* Existing theme provider from Shadcn/hooks */} 
           <TooltipProvider>
-            <header style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', borderBottom: '1px solid var(--border-color, #e5e7eb)',  boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <Leaf size={28} className="text-primary" />
-                <h1 style={{ marginLeft: '0.5rem', fontSize: '1.75rem', fontWeight: 'bold', fontFamily: 'Poppins, sans-serif' }} className="text-textColor dark:text-foreground">
-                  PlantPal
-                </h1>
+            <header className="bg-[#0f172a] text-white px-6 py-4 flex justify-between items-center gap-4 border-b border-gray-800/30 shadow-md">
+              <div className="flex items-center">
+                <div className="relative mr-2">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-primary/40 to-primary/20 rounded-full blur-md"></div>
+                  <Leaf size={24} className="text-primary relative z-10" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold font-poppins bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                    GreenGenius
+                  </h1>
+                  <p className="text-xs text-gray-400 font-medium -mt-1">Plant Care Assistant</p>
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div className="flex items-center gap-4">
                 <ThemeToggleButton /> {/* Add the toggle button here */}
                 <SignedOut>
                 {/* @ts-ignore TODO: Investigate Clerk types for afterSignInUrl/afterSignUpUrl on SignInButton */}
-                <SignInButton afterSignInUrl="/dashboard" afterSignUpUrl="/dashboard" />
+                <SignInButton afterSignInUrl="/dashboard" afterSignUpUrl="/dashboard" mode="modal" className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium transition-colors duration-200" />
                 {/* @ts-ignore TODO: Investigate Clerk types for afterSignInUrl/afterSignUpUrl on SignUpButton */}
-                <SignUpButton afterSignInUrl="/dashboard" afterSignUpUrl="/dashboard" />
+                <SignUpButton afterSignInUrl="/dashboard" afterSignUpUrl="/dashboard" mode="modal" className="px-4 py-2 rounded-lg bg-primary hover:bg-primary/90 text-white text-sm font-medium transition-colors duration-200" />
               </SignedOut>
               <SignedIn>
-                <UserButton afterSignOutUrl="/" />
+                <UserButton 
+                  afterSignOutUrl="/" 
+                  appearance={{
+                    elements: {
+                      avatarBox: "h-9 w-9 rounded-full ring-2 ring-primary/30 hover:ring-primary/50 transition-all duration-200"
+                    }
+                  }}
+                />
               </SignedIn>
               </div>
             </header>

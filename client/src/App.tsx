@@ -10,7 +10,6 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import Plants from "@/pages/Plants";
 import PlantDetails from "@/pages/PlantDetails";
-import AIRecommendationsPage from "@/pages/AIRecommendationsPage";
 import Landing from "@/pages/Landing";
 import {
   SignedIn,
@@ -80,7 +79,6 @@ function Router() {
       <ProtectedRoute path="/dashboard" component={Dashboard} />
       <ProtectedRoute path="/plants" component={Plants} />
       <ProtectedRoute path="/plants/:id" component={PlantDetails} />
-      <ProtectedRoute path="/recommendations" component={AIRecommendationsPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -99,11 +99,6 @@ export function Sidebar() {
           <NavItem path="/dashboard" icon={<Home className="w-5 h-5" />} label="Dashboard" />
           <NavItem path="/plants" icon={<Leaf className="w-5 h-5" />} label="My Plants" />
           <NavItem path="/history" icon={<Clock className="w-5 h-5" />} label="Care History" />
-          <NavItem
-            path="/recommendations"
-            icon={<Lightbulb className="w-5 h-5" />}
-            label="AI Recommendations"
-          />
         </div>
         <motion.div 
           className="pt-6 mt-6 border-t border-gray-800/30"

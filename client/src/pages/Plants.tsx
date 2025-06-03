@@ -41,12 +41,13 @@ export default function Plants() {
     // Then apply category filter
     if (filter === "all") return true;
     
-    const health = healthMetrics[plant.id]?.overallHealth || 0;
+    // Use plant.status directly
+    const status = plant.status || "healthy";
     
     if (filter === "needs-attention") {
-      return health < 75;
+      return status === "needs_attention" || status === "critical";
     } else if (filter === "healthy") {
-      return health >= 75;
+      return status === "healthy";
     }
     
     return true;
@@ -175,7 +176,6 @@ export default function Plants() {
                 <PlantCard
                   key={plant.id}
                   plant={plant}
-                  healthMetrics={healthMetrics[plant.id]}
                 />
               ))}
             </div>

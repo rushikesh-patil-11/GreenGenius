@@ -2,22 +2,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plant, PlantHealthMetric } from "@shared/schema";
 import { getHealthStatus, formatNextWatering } from "@/lib/utils";
-import { Droplet, Sun, Leaf, ChevronRight } from "lucide-react";
-import { ProgressBar } from "@/components/ui/progress-bar";
+import { Droplet, Sun, Calendar, ChevronRight, Clock, Leaf, Sparkles } from "lucide-react";
 import { Link } from "wouter";
+import { formatDistanceToNow } from "date-fns";
 
 interface PlantCardProps {
   plant: Plant;
   healthMetrics?: PlantHealthMetric;
 }
 
-export function PlantCard({ plant, healthMetrics }: PlantCardProps) {
-  const waterLevel = healthMetrics?.waterLevel || 0;
-  const lightLevel = healthMetrics?.lightLevel || 0;
-  const overallHealth = healthMetrics?.overallHealth || 0;
+export function PlantCard({ plant }: PlantCardProps) {
+  // Get actual status directly from plant data
+  const status = plant.status || "healthy";
+  const healthStatus = getHealthStatus(status === "healthy" ? 100 : status === "needs_attention" ? 50 : 25);
   
-  const healthStatus = getHealthStatus(overallHealth);
+  // Calculate next watering based on last watered date and frequency
   const nextWatering = formatNextWatering(plant.lastWatered || new Date(), plant.waterFrequencyDays || 7);
+  
+  // Calculate how long the plant has been in your collection
+  const plantAge = plant.acquiredDate ? formatDistanceToNow(new Date(plant.acquiredDate), { addSuffix: false }) : "Unknown";
   
   return (
     <Card className="plant-card bg-white dark:bg-card rounded-xl overflow-hidden shadow-natural">
@@ -44,39 +47,57 @@ export function PlantCard({ plant, healthMetrics }: PlantCardProps) {
         <p className="text-muted-foreground text-sm mt-1">{plant.species || "Unknown species"}</p>
         
         <div className="mt-4 space-y-3">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-800">
             <span className="text-sm text-textColor dark:text-foreground font-medium flex items-center">
-              <Droplet className="text-secondary mr-2 h-4 w-4" /> Water
+              <Droplet className="text-secondary mr-2 h-4 w-4" /> Water Needs
             </span>
-            <ProgressBar value={waterLevel} maxValue={100} className="w-32 bg-gray-200 dark:bg-gray-700" color="bg-secondary" />
+            <span className="text-sm text-muted-foreground">
+              {plant.watering_general_benchmark && typeof plant.watering_general_benchmark === 'object' && 'value' in plant.watering_general_benchmark && 'unit' in plant.watering_general_benchmark ? 
+                `${plant.watering_general_benchmark.value} ${plant.watering_general_benchmark.unit}` : 
+                plant.waterFrequencyDays ? `Every ${plant.waterFrequencyDays} days` : "Unknown"}
+            </span>
           </div>
-          <div className="flex justify-between items-center">
+          
+          <div className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-800">
             <span className="text-sm text-textColor dark:text-foreground font-medium flex items-center">
-              <Sun className="text-warning mr-2 h-4 w-4" /> Light
+              <Sun className="text-warning mr-2 h-4 w-4" /> Light Preference
             </span>
-            <ProgressBar value={lightLevel} maxValue={100} className="w-32 bg-gray-200 dark:bg-gray-700" color="bg-warning" />
+            <span className="text-sm text-muted-foreground">
+              {plant.sunlight && plant.sunlight.length > 0 ? 
+                plant.sunlight[0] : "Not specified"}
+            </span>
           </div>
-          <div className="flex justify-between items-center">
+          
+          <div className="flex justify-between items-center py-1 border-b border-gray-100 dark:border-gray-800">
             <span className="text-sm text-textColor dark:text-foreground font-medium flex items-center">
-              <Leaf className="text-primary mr-2 h-4 w-4" /> Health
+              <Sparkles className="text-primary mr-2 h-4 w-4" /> Care Level
             </span>
-            <ProgressBar 
-              value={overallHealth} 
-              maxValue={100} 
-              className="w-32 bg-gray-200 dark:bg-gray-700" 
-              color={overallHealth >= 75 ? "bg-success" : overallHealth >= 50 ? "bg-warning" : "bg-destructive"} 
-            />
+            <span className="text-sm text-muted-foreground">
+              {plant.care_level || "Standard"}
+            </span>
+          </div>
+          
+          <div className="flex justify-between items-center py-1">
+            <span className="text-sm text-textColor dark:text-foreground font-medium flex items-center">
+              <Calendar className="text-success mr-2 h-4 w-4" /> In Collection
+            </span>
+            <span className="text-sm text-muted-foreground">
+              {plantAge}
+            </span>
           </div>
         </div>
         
-        <div className="mt-5 flex items-center justify-between">
-          <div className="text-sm">
-            <span className="text-muted-foreground">Next water:</span>
-            <span 
-              className={`font-medium ml-1 ${nextWatering === 'Today!' ? 'text-destructive' : 'text-textColor dark:text-foreground'}`}
-            >
-              {nextWatering}
-            </span>
+        <div className="mt-5 flex items-center justify-between bg-gray-50 dark:bg-gray-900 p-2 rounded-lg">
+          <div className="flex items-center">
+            <Clock className="h-4 w-4 text-secondary mr-2" />
+            <div className="text-sm">
+              <span className="text-muted-foreground">Water </span>
+              <span 
+                className={`font-medium ${nextWatering === 'Today!' ? 'text-destructive' : 'text-textColor dark:text-foreground'}`}
+              >
+                {nextWatering}
+              </span>
+            </div>
           </div>
           <Link href={`/plants/${plant.id}`}>
             <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full bg-primary/10 text-primary hover:bg-primary/20">

@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Filter } from "lucide-react";
+import { Plus } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
 import { PlantCard } from "@/components/plants/PlantCard";
 import AddPlantModal from "@/components/modals/AddPlantModal";
 import { usePlants } from "@/hooks/usePlants";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import AppLoader from "@/components/ui/AppLoader";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@clerk/clerk-react";
@@ -16,7 +15,6 @@ import type { Plant } from "@shared/schema";
 export default function Plants() {
   const userId = 1; // In a real app, this would come from authentication
   const [isAddPlantModalOpen, setIsAddPlantModalOpen] = useState(false);
-  const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   
   const { plants, healthMetrics, isLoading } = usePlants({ enabled: !!userId });
@@ -30,27 +28,13 @@ export default function Plants() {
     setIsAddPlantModalOpen(true);
   };
   
-  // Filter and search plants
+  // Search plants
   const filteredPlants = plants.filter(plant => {
-    // First apply search filter
+    // Apply search filter
     const matchesSearch = plant.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                          (plant.species || "").toLowerCase().includes(searchQuery.toLowerCase());
     
-    if (!matchesSearch) return false;
-    
-    // Then apply category filter
-    if (filter === "all") return true;
-    
-    // Use plant.status directly
-    const status = plant.status || "healthy";
-    
-    if (filter === "needs-attention") {
-      return status === "needs_attention" || status === "critical";
-    } else if (filter === "healthy") {
-      return status === "healthy";
-    }
-    
-    return true;
+    return matchesSearch;
   });
 
   if (isLoading) {
@@ -106,8 +90,8 @@ export default function Plants() {
             </div>
           </div>
           
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          {/* Search */}
+          <div className="flex mb-6">
             <div className="relative flex-1">
               <Input
                 placeholder="Search plants..."
@@ -121,24 +105,6 @@ export default function Plants() {
                   <path d="m21 21-4.3-4.3"></path>
                 </svg>
               </div>
-            </div>
-            <div className="w-full sm:w-48">
-              <Select
-                value={filter}
-                onValueChange={(value) => setFilter(value)}
-              >
-                <SelectTrigger className="w-full bg-white dark:bg-card border border-gray-200 dark:border-gray-800 rounded-lg">
-                  <span className="flex items-center">
-                    <Filter className="h-4 w-4 mr-2" />
-                    <SelectValue placeholder="All Plants" />
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Plants</SelectItem>
-                  <SelectItem value="needs-attention">Need Attention</SelectItem>
-                  <SelectItem value="healthy">Healthy</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
           

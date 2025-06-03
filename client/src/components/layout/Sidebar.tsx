@@ -65,29 +65,34 @@ export function Sidebar() {
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
     >
       <motion.div 
-        className="flex items-center h-20 border-b border-border/50 px-6"
+        className="flex items-center justify-between h-20 border-b border-border/50 px-6"
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
       >
-        <div className="relative">
-          <motion.div 
-            className="absolute -inset-1 bg-gradient-to-r from-primary/30 to-primary/10 rounded-full blur-md"
-            animate={{ 
-              scale: [1, 1.1, 1],
-              opacity: [0.7, 0.9, 0.7] 
-            }}
-            transition={{ 
-              duration: 3, 
-              repeat: Infinity,
-              repeatType: "reverse" 
-            }}
-          />
-          <Leaf className="text-primary text-3xl relative z-10" />
+        <div className="flex items-center">
+          <div className="relative mr-3">
+            <motion.div 
+              className="absolute -inset-1 bg-gradient-to-r from-primary/40 to-primary/20 rounded-full blur-md"
+              animate={{ 
+                scale: [1, 1.1, 1],
+                opacity: [0.7, 0.9, 0.7] 
+              }}
+              transition={{ 
+                duration: 3, 
+                repeat: Infinity,
+                repeatType: "reverse" 
+              }}
+            />
+            <Leaf className="text-primary text-2xl relative z-10" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold font-poppins bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+              GreenGenius
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium -mt-1">Plant Care Assistant</p>
+          </div>
         </div>
-        <h1 className="ml-3 text-2xl font-bold font-poppins bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-          PlantPal
-        </h1>
       </motion.div>
       <nav className="px-4 py-6 space-y-6">
         <div className="space-y-2">

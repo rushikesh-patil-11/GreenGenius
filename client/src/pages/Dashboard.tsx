@@ -14,6 +14,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient"; // Added apiRequest
 import AppLoader from "@/components/ui/AppLoader";
 import type { Plant } from "@shared/schema";
 import type { CareTask } from "@shared/schema"; // Assuming CareTask might be relevant for tip display or future use
+import { TaskReminder } from "@/components/TaskReminder";
+import { usePlantCareTasks } from "@/hooks/usePlantCareTasks";
 
 // Helper to check if a date is today
 const isToday = (someDate: string | Date) => {
@@ -57,6 +59,7 @@ export default function Dashboard() {
   const { plants, healthMetrics, isLoading: isPlantsLoading } = usePlants({ enabled: !!isSignedIn && !!clerkUserId });
   const { tasks, isLoading: isTasksLoading, skipTask, completeTask } = useCareSchedule({ enabled: !!isSignedIn && !!clerkUserId });
   const { environmentData, recommendations, isLoading: isEnvironmentLoading } = useEnvironment({ enabled: !!isSignedIn && !!clerkUserId });
+  const { tasks: careTasks, isLoading: isCareTasksLoading } = usePlantCareTasks();
 
   const handleAddPlant = (newPlant: Plant) => {
     queryClient.invalidateQueries({ queryKey: ['/api/plants'] });
@@ -322,34 +325,19 @@ export default function Dashboard() {
                 <BrainCircuit className="h-7 w-7 mr-3 text-purple-500" />
                 <h2 className="text-2xl font-bold text-green-700 dark:text-green-400">Task Reminders</h2>
               </div>
-              {isTasksLoading ? (
+              {isCareTasksLoading ? (
                 <AppLoader title="Loading Reminders" message="Fetching your task reminders..." size="small" variant="minimal" />
-              ) : tasks && tasks.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {tasks.filter(task => !task.completed).map((task) => (
-                    <div key={task.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          {task.taskType === 'water' ? (
-                            <Droplet className="h-5 w-5 text-blue-500" />
-                          ) : task.taskType === 'prune' ? (
-                            <Leaf className="h-5 w-5 text-green-500" />
-                          ) : (
-                            <Sprout className="h-5 w-5 text-green-500" />
-                          )}
-                        </div>
-                        <div className="ml-3">
-                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200">
-                            {task.plantName ? task.plantName : 'Your plant'}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            {task.taskType === 'water' ? 'Needs watering' : 
-                             task.taskType === 'prune' ? 'Needs pruning' : 
-                             task.taskType === 'fertilize' ? 'Needs fertilizer' : task.taskType}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+              ) : careTasks && careTasks.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {careTasks.map((task) => (
+                    <TaskReminder
+                      key={task.id}
+                      plantId={task.plantId}
+                      wateringBenchmark={2} // Default to 2 days if not specified
+                      lastWateringDate={task.type === 'watering' ? task.dueDate : undefined}
+                      lastFertilizingDate={task.type === 'fertilizing' ? task.dueDate : undefined}
+                      lastPruningDate={task.type === 'pruning' ? task.dueDate : undefined}
+                    />
                   ))}
                 </div>
               ) : (

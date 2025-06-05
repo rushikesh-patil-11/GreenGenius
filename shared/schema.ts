@@ -270,3 +270,14 @@ export interface EnvironmentData {
   lightLevel: string | null;
   soil_moisture_0_to_10cm?: number | null; // Added for Gemini, optional for now
 }
+
+export interface PlantCareTask {
+  id: string;
+  plantId: string;
+  type: 'watering' | 'fertilizing' | 'pruning';
+  dueDate: Date;
+  status: 'pending' | 'completed' | 'skipped';
+  completedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}

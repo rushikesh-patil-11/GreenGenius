@@ -612,11 +612,17 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  const port = 5000;
-  server.listen({
-    port,
-    host: "127.0.0.1",
-  }, () => {
-    console.log(`Server running at http://localhost:${port}`);
-  });
+  // Only start the server if we're not in a serverless environment
+  if (process.env.NODE_ENV !== 'production' || process.env.VERCEL !== '1') {
+    const port = process.env.PORT || 5000;
+    server.listen({
+      port,
+      host: "127.0.0.1",
+    }, () => {
+      console.log(`Server running at http://localhost:${port}`);
+    });
+  }
 })();
+
+// Export the Express app for serverless environments
+export default app;

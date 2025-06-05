@@ -54,30 +54,12 @@ export function PlantsList({ plants, healthMetrics, loading = false }: PlantsLis
 
   return (
     <div className="mb-8">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold font-poppins text-textColor dark:text-foreground">My Plants</h2>
-        <div className="flex items-center">
-          <div className="relative mr-2">
-            <Select
-              value={filter}
-              onValueChange={(value) => setFilter(value)}
-            >
-              <SelectTrigger className="w-[180px] bg-white dark:bg-card border border-gray-200 dark:border-gray-800 rounded-lg">
-                <SelectValue placeholder="All Plants" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Plants</SelectItem>
-                <SelectItem value="needs-attention">Need Attention</SelectItem>
-                <SelectItem value="healthy">Healthy</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Link to="/plants">
-            <Button variant="link" className="text-secondary">
-              View All <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </Link>
-        </div>
+      <div className="flex items-center justify-end mb-4">
+        <Link to="/plants">
+          <Button variant="link" className="text-secondary">
+            View All <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </Link>
       </div>
       
       {filteredPlants.length === 0 ? (

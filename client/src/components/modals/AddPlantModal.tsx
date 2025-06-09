@@ -3,7 +3,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm, type FieldErrors } from "react-hook-form"; // Import FieldErrors
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,7 +42,7 @@ export function AddPlantModal({ isOpen, onClose, onAddPlant }: AddPlantModalProp
     setIsSubmitting(true);
     
     try {
-      // The backend expects an object like { commonName: "..." }
+      // ok The backend expects an object like { commonName: "..." }
       const newPlant = await apiRequest<Plant>("/api/plants", { method: "POST", data: values });
 
       toast({

@@ -32,56 +32,178 @@ export const TaskReminder: React.FC<TaskReminderProps> = ({
 }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
 
-  const generateTasks = () => {
+  const generateTasks = async () => {
     const newTasks: Task[] = [];
     const today = new Date();
 
-    // Generate watering task
-    if (lastWateringDate) {
-      const nextWateringDate = addDays(lastWateringDate, wateringBenchmark);
-      if (isBefore(nextWateringDate, today) || isToday(nextWateringDate)) {
-        newTasks.push({
+    try {
+      // For new plants (no lastWateringDate), create immediate watering task
+      if (!lastWateringDate) {
+        const wateringTask: Task = {
           id: `watering-${plantId}`,
           plantId,
           type: 'watering',
-          dueDate: nextWateringDate,
+          dueDate: today,
           status: 'pending',
-          lastCareDate: lastWateringDate,
-        });
-      }
-    }
+        };
+        newTasks.push(wateringTask);
+        
+        // Save to database
+        const { error: wateringError } = await supabase
+          .from('plant_care_tasks')
+          .insert({
+            plant_id: plantId,
+            type: 'watering',
+            due_date: today.toISOString(),
+            status: 'pending'
+          });
 
-    // Generate fertilizing task (every 30 days)
-    if (lastFertilizingDate) {
-      const nextFertilizingDate = addDays(lastFertilizingDate, 30);
-      if (isBefore(nextFertilizingDate, today) || isToday(nextFertilizingDate)) {
-        newTasks.push({
+        if (wateringError) {
+          console.error('Error creating watering task:', wateringError);
+        }
+      } else {
+        // Generate watering task for existing plants
+        const nextWateringDate = addDays(lastWateringDate, wateringBenchmark);
+        if (isBefore(nextWateringDate, today) || isToday(nextWateringDate)) {
+          const wateringTask: Task = {
+            id: `watering-${plantId}`,
+            plantId,
+            type: 'watering',
+            dueDate: nextWateringDate,
+            status: 'pending',
+            lastCareDate: lastWateringDate,
+          };
+          newTasks.push(wateringTask);
+          
+          // Save to database
+          const { error: wateringError } = await supabase
+            .from('plant_care_tasks')
+            .insert({
+              plant_id: plantId,
+              type: 'watering',
+              due_date: nextWateringDate.toISOString(),
+              status: 'pending',
+              last_care_date: lastWateringDate.toISOString()
+            });
+
+          if (wateringError) {
+            console.error('Error creating watering task:', wateringError);
+          }
+        }
+      }
+
+      // Generate fertilizing task (every 30 days)
+      if (!lastFertilizingDate) {
+        const fertilizingTask: Task = {
           id: `fertilizing-${plantId}`,
           plantId,
           type: 'fertilizing',
-          dueDate: nextFertilizingDate,
+          dueDate: addDays(today, 30),
           status: 'pending',
-          lastCareDate: lastFertilizingDate,
-        });
-      }
-    }
+        };
+        newTasks.push(fertilizingTask);
+        
+        // Save to database
+        const { error: fertilizingError } = await supabase
+          .from('plant_care_tasks')
+          .insert({
+            plant_id: plantId,
+            type: 'fertilizing',
+            due_date: addDays(today, 30).toISOString(),
+            status: 'pending'
+          });
 
-    // Generate pruning task (every 90 days)
-    if (lastPruningDate) {
-      const nextPruningDate = addDays(lastPruningDate, 90);
-      if (isBefore(nextPruningDate, today) || isToday(nextPruningDate)) {
-        newTasks.push({
+        if (fertilizingError) {
+          console.error('Error creating fertilizing task:', fertilizingError);
+        }
+      } else {
+        const nextFertilizingDate = addDays(lastFertilizingDate, 30);
+        if (isBefore(nextFertilizingDate, today) || isToday(nextFertilizingDate)) {
+          const fertilizingTask: Task = {
+            id: `fertilizing-${plantId}`,
+            plantId,
+            type: 'fertilizing',
+            dueDate: nextFertilizingDate,
+            status: 'pending',
+            lastCareDate: lastFertilizingDate,
+          };
+          newTasks.push(fertilizingTask);
+          
+          // Save to database
+          const { error: fertilizingError } = await supabase
+            .from('plant_care_tasks')
+            .insert({
+              plant_id: plantId,
+              type: 'fertilizing',
+              due_date: nextFertilizingDate.toISOString(),
+              status: 'pending',
+              last_care_date: lastFertilizingDate.toISOString()
+            });
+
+          if (fertilizingError) {
+            console.error('Error creating fertilizing task:', fertilizingError);
+          }
+        }
+      }
+
+      // Generate pruning task (every 90 days)
+      if (!lastPruningDate) {
+        const pruningTask: Task = {
           id: `pruning-${plantId}`,
           plantId,
           type: 'pruning',
-          dueDate: nextPruningDate,
+          dueDate: addDays(today, 90),
           status: 'pending',
-          lastCareDate: lastPruningDate,
-        });
-      }
-    }
+        };
+        newTasks.push(pruningTask);
+        
+        // Save to database
+        const { error: pruningError } = await supabase
+          .from('plant_care_tasks')
+          .insert({
+            plant_id: plantId,
+            type: 'pruning',
+            due_date: addDays(today, 90).toISOString(),
+            status: 'pending'
+          });
 
-    setTasks(newTasks);
+        if (pruningError) {
+          console.error('Error creating pruning task:', pruningError);
+        }
+      } else {
+        const nextPruningDate = addDays(lastPruningDate, 90);
+        if (isBefore(nextPruningDate, today) || isToday(nextPruningDate)) {
+          const pruningTask: Task = {
+            id: `pruning-${plantId}`,
+            plantId,
+            type: 'pruning',
+            dueDate: nextPruningDate,
+            status: 'pending',
+            lastCareDate: lastPruningDate,
+          };
+          newTasks.push(pruningTask);
+          
+          // Save to database
+          const { error: pruningError } = await supabase
+            .from('plant_care_tasks')
+            .insert({
+              plant_id: plantId,
+              type: 'pruning',
+              due_date: nextPruningDate.toISOString(),
+              status: 'pending',
+              last_care_date: lastPruningDate.toISOString()
+            });
+
+          if (pruningError) {
+            console.error('Error creating pruning task:', pruningError);
+          }
+        }
+      }
+
+      setTasks(newTasks);
+    } catch (error) {
+      console.error('Error generating tasks:', error);
+    }
   };
 
   useEffect(() => {

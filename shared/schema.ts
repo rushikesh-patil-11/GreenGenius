@@ -278,6 +278,7 @@ export interface PlantCareTask {
   dueDate: Date;
   status: 'pending' | 'completed' | 'skipped';
   completedAt?: Date;
+  lastCareDate?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

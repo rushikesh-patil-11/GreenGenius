@@ -1,1 +1,0 @@
-ALTER TABLE "plants" ADD COLUMN "notes" text;

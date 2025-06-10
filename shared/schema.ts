@@ -150,20 +150,25 @@ export const insertEnvironmentReadingSchema = createInsertSchema(environmentRead
   readingTimestamp: true,
 });
 
-// Care tasks schema
-export const careTasks = pgTable("care_tasks", {
-  id: serial("id").primaryKey(),
-  plantId: integer("plant_id").notNull().references(() => plants.id, { onDelete: "cascade" }),
-  taskType: text("task_type").notNull(), // water, fertilize, prune, etc.
+// Plant care tasks schema (new)
+export const plantCareTasks = pgTable("plant_care_tasks", {
+  id: text("id").primaryKey(), // UUID
+  plantId: text("plant_id").notNull().references(() => plants.id, { onDelete: "cascade" }), // UUID
+  type: text("type").notNull(), // 'watering', 'fertilizing', 'pruning'
   dueDate: timestamp("due_date").notNull(),
-  completed: boolean("completed").default(false),
-  completedDate: timestamp("completed_date"),
-  skipped: boolean("skipped").default(false),
+  status: text("status").notNull(), // 'pending', 'completed', 'skipped'
+  completedAt: timestamp("completed_at"),
+  lastCareDate: timestamp("last_care_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const insertCareTaskSchema = createInsertSchema(careTasks).omit({
+export const insertPlantCareTaskSchema = createInsertSchema(plantCareTasks).omit({
   id: true,
-  completedDate: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  lastCareDate: true,
 });
 
 // AI Recommendations schema
@@ -238,8 +243,8 @@ export type InsertPlant = z.infer<typeof insertPlantSchema>;
 export type EnvironmentReading = typeof environmentReadings.$inferSelect;
 export type InsertEnvironmentReading = z.infer<typeof insertEnvironmentReadingSchema>;
 
-export type CareTask = typeof careTasks.$inferSelect;
-export type InsertCareTask = z.infer<typeof insertCareTaskSchema>;
+export type PlantCareTask = typeof plantCareTasks.$inferSelect;
+export type InsertPlantCareTask = z.infer<typeof insertPlantCareTaskSchema>;
 
 export type Recommendation = typeof recommendations.$inferSelect;
 export type InsertRecommendation = z.infer<typeof insertRecommendationSchema>;
@@ -253,7 +258,7 @@ export type InsertPlantHealthMetric = z.infer<typeof insertPlantHealthMetricsSch
 export type AiCareTip = typeof aiCareTips.$inferSelect;
 export type InsertAiCareTip = z.infer<typeof insertAiCareTipSchema>;
 
-export type EnrichedCareTask = CareTask & { plantName: string | null };
+// Remove EnrichedCareTask, as CareTask is no longer present and plantName is handled at the frontend or via joins.
 
 // Interface for plant data used by Gemini service
 export interface PlantData {
@@ -271,14 +276,3 @@ export interface EnvironmentData {
   soil_moisture_0_to_10cm?: number | null; // Added for Gemini, optional for now
 }
 
-export interface PlantCareTask {
-  id: string;
-  plantId: string;
-  type: 'watering' | 'fertilizing' | 'pruning';
-  dueDate: Date;
-  status: 'pending' | 'completed' | 'skipped';
-  completedAt?: Date;
-  lastCareDate?: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}

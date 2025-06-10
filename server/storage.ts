@@ -344,6 +344,23 @@ export class DbStorage implements IStorage {
         lastWatered: newPlantFromDb.lastWatered ? new Date(newPlantFromDb.lastWatered) : null,
       };
 
+      // --- Auto-create watering task after plant creation ---
+      try {
+        let dueDate = new Date();
+        if (typeof resultPlant.waterFrequencyDays === 'number' && resultPlant.waterFrequencyDays > 0) {
+          dueDate.setDate(dueDate.getDate() + resultPlant.waterFrequencyDays);
+        }
+        await this.createPlantCareTask({
+          plantId: resultPlant.id.toString(),
+          type: 'watering',
+          dueDate,
+          status: 'pending',
+        });
+        console.log(`[storage.ts] Auto-created watering task for plant ID: ${resultPlant.id} with due date: ${dueDate}`);
+      } catch (taskErr) {
+        console.error(`[storage.ts] Error auto-creating watering task for plant ID: ${resultPlant.id}`, taskErr);
+      }
+
       console.log('[storage.ts] DbStorage.createPlant: Returning plant:', JSON.stringify(resultPlant, null, 2));
       // The 'as Plant' cast assumes resultPlant now conforms to the Plant type.
       // This was present in the original code and is kept for consistency.

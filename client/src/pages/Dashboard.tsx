@@ -13,7 +13,6 @@ import { useAuth } from "@clerk/clerk-react";
 import { queryClient, apiRequest } from "@/lib/queryClient"; // Added apiRequest
 import AppLoader from "@/components/ui/AppLoader";
 import type { Plant } from "@shared/schema";
-import type { CareTask } from "@shared/schema"; // Assuming CareTask might be relevant for tip display or future use
 import { TaskReminder } from "@/components/TaskReminder";
 import { usePlantCareTasks } from "@/hooks/usePlantCareTasks";
 

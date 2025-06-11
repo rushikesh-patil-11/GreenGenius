@@ -290,22 +290,6 @@ export default function Dashboard() {
                 <BrainCircuit className="h-7 w-7 mr-3 text-purple-500" />
                 <h2 className="text-2xl font-bold text-green-700 dark:text-green-400">Task Reminders</h2>
               </div>
-              {isPlantsLoading ? (
-                <AppLoader title="Loading Reminders" message="Fetching your plants..." size="small" variant="minimal" />
-              ) : plants && plants.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4">
-                  {plants.map((plant) => (
-  <TaskReminder
-    key={plant.id}
-    plantId={plant.id?.toString()}
-    wateringBenchmark={plant.waterFrequencyDays ?? 2}
-    lastWateringDate={plant.lastWatered ? new Date(plant.lastWatered) : undefined}
-  />
-))}
-                </div>
-              ) : (
-                <p className="text-gray-600 dark:text-gray-300">No plants found. Add some plants to get care reminders.</p>
-              )}
             </div>
           </div>
 

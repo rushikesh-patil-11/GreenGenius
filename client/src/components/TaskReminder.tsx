@@ -49,6 +49,7 @@ export const TaskReminder: React.FC<TaskReminderProps> = ({
         newTasks.push(wateringTask);
         
         // Save to database
+        console.debug('Inserting watering task:', { plant_id: plantId, type: 'watering', due_date: today.toISOString(), status: 'pending' });
         const { error: wateringError } = await supabase
           .from('plant_care_tasks')
           .insert({
@@ -76,6 +77,7 @@ export const TaskReminder: React.FC<TaskReminderProps> = ({
           newTasks.push(wateringTask);
           
           // Save to database
+          console.debug('Inserting watering task:', { plant_id: plantId, type: 'watering', due_date: nextWateringDate.toISOString(), status: 'pending', last_care_date: lastWateringDate.toISOString() });
           const { error: wateringError } = await supabase
             .from('plant_care_tasks')
             .insert({
@@ -104,6 +106,7 @@ export const TaskReminder: React.FC<TaskReminderProps> = ({
         newTasks.push(fertilizingTask);
         
         // Save to database
+        console.debug('Inserting fertilizing task:', { plant_id: plantId, type: 'fertilizing', due_date: addDays(today, 30).toISOString(), status: 'pending' });
         const { error: fertilizingError } = await supabase
           .from('plant_care_tasks')
           .insert({
@@ -130,6 +133,7 @@ export const TaskReminder: React.FC<TaskReminderProps> = ({
           newTasks.push(fertilizingTask);
           
           // Save to database
+          console.debug('Inserting fertilizing task:', { plant_id: plantId, type: 'fertilizing', due_date: nextFertilizingDate.toISOString(), status: 'pending', last_care_date: lastFertilizingDate.toISOString() });
           const { error: fertilizingError } = await supabase
             .from('plant_care_tasks')
             .insert({
@@ -158,6 +162,7 @@ export const TaskReminder: React.FC<TaskReminderProps> = ({
         newTasks.push(pruningTask);
         
         // Save to database
+        console.debug('Inserting pruning task:', { plant_id: plantId, type: 'pruning', due_date: addDays(today, 90).toISOString(), status: 'pending' });
         const { error: pruningError } = await supabase
           .from('plant_care_tasks')
           .insert({
@@ -184,6 +189,7 @@ export const TaskReminder: React.FC<TaskReminderProps> = ({
           newTasks.push(pruningTask);
           
           // Save to database
+          console.debug('Inserting pruning task:', { plant_id: plantId, type: 'pruning', due_date: nextPruningDate.toISOString(), status: 'pending', last_care_date: lastPruningDate.toISOString() });
           const { error: pruningError } = await supabase
             .from('plant_care_tasks')
             .insert({

@@ -242,50 +242,6 @@ export default function Dashboard() {
                           <p className="text-sm text-gray-500 dark:text-gray-400">Remaining</p>
                         </div>
                       </div>
-                      <div className="space-y-3 mt-2">
-                        {pendingTasks.filter((task: typeof pendingTasks[number]) => !task.completed).map((task: typeof pendingTasks[number]) => (
-                          <div 
-                            key={task.id} 
-                            className={`p-4 rounded-2xl ${task.taskType === 'watering' ? "bg-white shadow" : "bg-[#1e2141]"} ${task.taskType === 'watering' ? "text-gray-800" : "text-white"}`}
-                          >
-                            <div className="flex items-center mb-1">
-                              <div className="flex items-center">
-                                {task.taskType === 'watering' ? (
-                                  <Droplet className="h-5 w-5 mr-2 text-blue-500" />
-                                ) : task.taskType === 'pruning' ? (
-                                  <Leaf className="h-5 w-5 mr-2 text-green-300" />
-                                ) : (
-                                  <Sprout className="h-5 w-5 mr-2 text-green-300" />
-                                )}
-                                <h4 className="font-medium">
-                                  {task.taskType === 'watering' ? 'Water the Plant' : 
-                                   task.taskType === 'pruning' ? 'Cut the leaves' : 
-                                   task.taskType === 'fertilizing' ? 'Add Fertilizer' : task.taskType}
-                                </h4>
-                              </div>
-                            </div>
-                            <p className={`text-sm ${task.taskType === 'watering' ? "text-gray-500" : "text-gray-200 opacity-90"} mb-3`}>
-                              {task.plantName ? task.plantName : 'Your plant'}
-                            </p>
-                            <div className="flex justify-between mt-2">
-                              <button 
-                                onClick={() => updateTask({ taskId: task.id, updates: { status: 'skipped' } })}
-                                className={task.taskType === 'watering' ? 
-                                  "flex items-center justify-center px-3 py-1.5 bg-transparent border border-gray-400 text-sm font-medium rounded-md text-gray-600 opacity-80 hover:opacity-100 transition-opacity" :
-                                  "flex items-center justify-center px-3 py-1.5 bg-transparent border border-gray-500 text-sm font-medium rounded-md text-white opacity-80 hover:opacity-100 transition-opacity"}
-                              >
-                                <span className="mr-1">✕</span> Skip
-                              </button>
-                              <button 
-                                onClick={() => updateTask({ taskId: task.id, updates: { status: 'done', completedAt: new Date() } })}
-                                className="flex items-center justify-center px-3 py-1.5 bg-green-600 hover:bg-green-700 text-sm font-medium rounded-md text-white transition-colors"
-                              >
-                                <span className="mr-1">✓</span> Done
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
                     </div>
                   ) : (
                     <p className="text-gray-600 dark:text-gray-300 mt-4">No tasks for today! Add some plants to get care tasks.</p>
@@ -334,23 +290,21 @@ export default function Dashboard() {
                 <BrainCircuit className="h-7 w-7 mr-3 text-purple-500" />
                 <h2 className="text-2xl font-bold text-green-700 dark:text-green-400">Task Reminders</h2>
               </div>
-              {isCareTasksLoading ? (
-                <AppLoader title="Loading Reminders" message="Fetching your task reminders..." size="small" variant="minimal" />
-              ) : careTasks && careTasks.length > 0 ? (
+              {isPlantsLoading ? (
+                <AppLoader title="Loading Reminders" message="Fetching your plants..." size="small" variant="minimal" />
+              ) : plants && plants.length > 0 ? (
                 <div className="grid grid-cols-1 gap-4">
-                  {careTasks.map((task) => (
-                    <TaskReminder
-                      key={task.id}
-                      plantId={task.plantId}
-                      wateringBenchmark={2} // Default to 2 days if not specified
-                      lastWateringDate={task.type === 'watering' ? task.dueDate : undefined}
-                      lastFertilizingDate={task.type === 'fertilizing' ? task.dueDate : undefined}
-                      lastPruningDate={task.type === 'pruning' ? task.dueDate : undefined}
-                    />
-                  ))}
+                  {plants.map((plant) => (
+  <TaskReminder
+    key={plant.id}
+    plantId={plant.id?.toString()}
+    wateringBenchmark={plant.waterFrequencyDays ?? 2}
+    lastWateringDate={plant.lastWatered ? new Date(plant.lastWatered) : undefined}
+  />
+))}
                 </div>
               ) : (
-                <p className="text-gray-600 dark:text-gray-300">No pending reminders for today.</p>
+                <p className="text-gray-600 dark:text-gray-300">No plants found. Add some plants to get care reminders.</p>
               )}
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"; // Added useEffect
-import { Plus, Thermometer, Droplet, Sun, Sprout, BarChartHorizontalBig, BrainCircuit, Leaf, Wind } from "lucide-react";
+import { Plus, Thermometer, Droplet, Sun, Sprout, BarChartHorizontalBig, BrainCircuit, Leaf, Wind, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
@@ -65,12 +65,24 @@ export default function Dashboard() {
   };
 
   // Normalize task data for UI
-  const normalizedTasks = (careTasks || []).map(task => ({
-    ...task,
-    completed: task.status === 'done',
-    taskType: task.type, // 'watering', 'fertilizing', 'pruning'
-    plantName: (task as any).plant_name || '', // fallback if not present
-  }));
+  const normalizedTasks = (careTasks || []).map(task => {
+    // Ensure plantId is present, fallback to plant_id from backend
+    const plantId = task.plantId || (task as any).plant_id;
+    // Debug: log plantId and all plant ids
+    console.log('Task:', task.id, 'plantId:', plantId, 'all plant ids:', plants ? plants.map(p => p.id) : []);
+    let plantName = (task as any).plant_name || '';
+    if (!plantName && plants && plantId) {
+      const plant = plants.find(p => String(p.id) === String(plantId));
+      if (plant) plantName = plant.name;
+    }
+    return {
+      ...task,
+      plantId, // always attach plantId
+      completed: task.status === 'done',
+      taskType: task.type, // 'watering', 'fertilizing', 'pruning'
+      plantName: plantName || 'Unknown Plant',
+    };
+  });
 
   // Debug output to inspect fetched tasks
   console.log("Fetched careTasks:", normalizedTasks.map(task => ({id: task.id, dueDate: task.dueDate, status: task.status, type: task.type})));
@@ -290,7 +302,31 @@ export default function Dashboard() {
                 <BrainCircuit className="h-7 w-7 mr-3 text-purple-500" />
                 <h2 className="text-2xl font-bold text-green-700 dark:text-green-400">Task Reminders</h2>
               </div>
+              <div className="space-y-3">
+                {pendingTasks.length === 0 ? (
+                  <div className="text-gray-600 dark:text-gray-300 italic">No pending tasks! Enjoy your day </div>
+                ) : (
+                  pendingTasks.map(task => (
+                    <div key={task.id} className="bg-white dark:bg-slate-700 rounded-lg shadow flex items-center justify-between p-4">
+                      <div className="flex items-center gap-3">
+                        {/* Type icon */}
+                        {task.taskType === 'watering' && <Droplet className="w-5 h-5 text-blue-500" />}
+                        {task.taskType === 'fertilizing' && <Sun className="w-5 h-5 text-yellow-500" />}
+                        {task.taskType === 'pruning' && <Scissors className="w-5 h-5 text-green-700" />}
+                        <div>
+                          <div className="font-semibold capitalize text-gray-800 dark:text-gray-100">{task.taskType} <span className="text-sm font-normal text-gray-500 dark:text-gray-300">for</span> {task.plantName}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">Due: {new Date(task.dueDate).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                      <div>
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 capitalize">{task.status}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
+
           </div>
 
           {/* My Plants Section */}

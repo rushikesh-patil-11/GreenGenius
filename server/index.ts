@@ -197,6 +197,40 @@ app.get('/api/plant-details/:plantName', ClerkExpressRequireAuth(), async (req: 
         })
         .returning();
       log(`Upserted plant data to DB for perenual_id: ${apiData.id}, user: ${internalUserId}`);
+
+      // --- Auto-create watering task after upsert if plant is new ---
+      try {
+        if (result[0] && result[0].id && req.method === 'POST') { // Only on POST (new plant)
+          let dueDate = new Date();
+          if (typeof result[0].waterFrequencyDays === 'number' && result[0].waterFrequencyDays > 0) {
+            dueDate.setDate(dueDate.getDate() + result[0].waterFrequencyDays);
+          }
+          // Check if a watering task already exists for this plant and due date (avoid duplicates)
+          // Import eq, and from drizzle-orm at the top of the file
+          // import { eq, and } from 'drizzle-orm';
+          const existingTasks = await dbInstance.select().from(schema.plantCareTasks)
+            .where(and(
+              eq(schema.plantCareTasks.plantId, result[0].id.toString()),
+              eq(schema.plantCareTasks.type, 'watering')
+            ));
+          if (!existingTasks || existingTasks.length === 0) {
+            await dbInstance.insert(schema.plantCareTasks).values({
+              id: crypto.randomUUID(),
+              plantId: result[0].id.toString(),
+              type: 'watering',
+              status: 'pending',
+              dueDate,
+              completedAt: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            log(`[index.ts] Auto-created watering task for plant ID: ${result[0].id} with due date: ${dueDate}`);
+          }
+        }
+      } catch (taskErr) {
+        console.error(`[index.ts] Error auto-creating watering task for plant ID: ${result[0]?.id}`, taskErr);
+      }
+
       res.json(result[0]); // Return the upserted data from DB
     } catch (dbUpsertError) {
       console.error('Error upserting plant data to DB:', dbUpsertError);
@@ -549,6 +583,35 @@ app.post('/api/plants', ClerkExpressRequireAuth(), async (req: Request, res: Res
         log(`POST /api/plants: Error ensuring health metrics for plant ID ${result[0].id}: ${healthMetricsError}`);
         // Do not fail the request for this, but log it.
       }
+    }
+    // --- Auto-create watering task after upsert if plant is new ---
+    try {
+      if (result[0] && result[0].id) {
+        let dueDate = new Date();
+        if (typeof result[0].waterFrequencyDays === 'number' && result[0].waterFrequencyDays > 0) {
+          dueDate.setDate(dueDate.getDate() + result[0].waterFrequencyDays);
+        }
+        const existingTasks = await dbInstance.select().from(schema.plantCareTasks)
+          .where(and(
+            eq(schema.plantCareTasks.plantId, result[0].id.toString()),
+            eq(schema.plantCareTasks.type, 'watering')
+          ));
+        if (!existingTasks || existingTasks.length === 0) {
+          await dbInstance.insert(schema.plantCareTasks).values({
+            id: crypto.randomUUID(),
+            plantId: result[0].id.toString(),
+            type: 'watering',
+            status: 'pending',
+            dueDate,
+            completedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          log(`[index.ts] Auto-created watering task for plant ID: ${result[0].id} with due date: ${dueDate}`);
+        }
+      }
+    } catch (taskErr) {
+      console.error(`[index.ts] Error auto-creating watering task for plant ID: ${result[0]?.id}`, taskErr);
     }
     res.status(201).json(result[0]); // Return the upserted data from DB
 

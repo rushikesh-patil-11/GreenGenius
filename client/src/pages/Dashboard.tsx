@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"; // Added useEffect
-import { Plus, Thermometer, Droplet, Sun, Sprout, BarChartHorizontalBig, BrainCircuit, Leaf, Wind } from "lucide-react";
+import { Plus, Thermometer, Droplet, Sun, Sprout, BarChartHorizontalBig, BrainCircuit, Leaf, Wind, Scissors, CheckCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
@@ -7,23 +7,20 @@ import PlantsList from "@/components/plants/PlantsList";
 import AddPlantModal from "@/components/modals/AddPlantModal";
 import { useDashboardStats } from "@/hooks/useEnvironment"; // Assuming this provides totalPlants
 import { usePlants } from "@/hooks/usePlants";
-import { useCareSchedule } from "@/hooks/useCareSchedule";
 import { useEnvironment } from "@/hooks/useEnvironment";
 import { useAuth } from "@clerk/clerk-react";
 import { queryClient, apiRequest } from "@/lib/queryClient"; // Added apiRequest
 import AppLoader from "@/components/ui/AppLoader";
 import type { Plant } from "@shared/schema";
-import type { CareTask } from "@shared/schema"; // Assuming CareTask might be relevant for tip display or future use
 import { TaskReminder } from "@/components/TaskReminder";
 import { usePlantCareTasks } from "@/hooks/usePlantCareTasks";
 
-// Helper to check if a date is today
+// Helper to check if a date is today (UTC-safe)
 const isToday = (someDate: string | Date) => {
   const today = new Date();
   const dateToCompare = new Date(someDate);
-  return dateToCompare.getDate() === today.getDate() &&
-    dateToCompare.getMonth() === today.getMonth() &&
-    dateToCompare.getFullYear() === today.getFullYear();
+  // Compare YYYY-MM-DD in UTC
+  return today.toISOString().slice(0, 10) === dateToCompare.toISOString().slice(0, 10);
 };
 
 interface WeatherCardProps {
@@ -57,9 +54,9 @@ export default function Dashboard() {
 
   const { stats, isLoading: isStatsLoading } = useDashboardStats({ enabled: !!isSignedIn && !!clerkUserId });
   const { plants, healthMetrics, isLoading: isPlantsLoading } = usePlants({ enabled: !!isSignedIn && !!clerkUserId });
-  const { tasks, isLoading: isTasksLoading, skipTask, completeTask } = useCareSchedule({ enabled: !!isSignedIn && !!clerkUserId });
+  // Unified task logic: use only usePlantCareTasks
+  const { tasks: careTasks, isLoading: isCareTasksLoading, updateTask } = usePlantCareTasks();
   const { environmentData, recommendations, isLoading: isEnvironmentLoading } = useEnvironment({ enabled: !!isSignedIn && !!clerkUserId });
-  const { tasks: careTasks, isLoading: isCareTasksLoading } = usePlantCareTasks();
 
   const handleAddPlant = (newPlant: Plant) => {
     queryClient.invalidateQueries({ queryKey: ['/api/plants'] });
@@ -67,7 +64,33 @@ export default function Dashboard() {
     console.log('Plant added:', newPlant);
   };
 
-  const tasksToday = tasks?.filter(task => isToday(task.dueDate)).length || 0;
+  // Normalize task data for UI
+  const normalizedTasks = (careTasks || []).map(task => {
+    // Ensure plantId is present, fallback to plant_id from backend
+    const plantId = task.plantId || (task as any).plant_id;
+    // Debug: log plantId and all plant ids
+    console.log('Task:', task.id, 'plantId:', plantId, 'all plant ids:', plants ? plants.map(p => p.id) : []);
+    let plantName = (task as any).plant_name || '';
+    if (!plantName && plants && plantId) {
+      const plant = plants.find(p => String(p.id) === String(plantId));
+      if (plant) plantName = plant.name;
+    }
+    return {
+      ...task,
+      plantId, // always attach plantId
+      completed: task.status === 'done',
+      taskType: task.type, // 'watering', 'fertilizing', 'pruning'
+      plantName: plantName || 'Unknown Plant',
+    };
+  });
+
+  // Debug output to inspect fetched tasks
+  console.log("Fetched careTasks:", normalizedTasks.map(task => ({id: task.id, dueDate: task.dueDate, status: task.status, type: task.type})));
+  // Show all pending tasks instead of only today's
+  const pendingTasks = normalizedTasks.filter((task: typeof normalizedTasks[number]) => task.status === 'pending');
+  const totalTasks = pendingTasks.length;
+  const completedTasks = pendingTasks.filter((task: typeof normalizedTasks[number]) => task.completed).length;
+  const remainingTasks = pendingTasks.filter((task: typeof normalizedTasks[number]) => !task.completed).length;
   // const aiTip = recommendations && recommendations.length > 0 ? recommendations[0] : null; // Old way of getting tip
 
   // useEffect for fetching General AI Tip of the Day
@@ -119,7 +142,7 @@ export default function Dashboard() {
 
 
   // Check if all main data is loading, but only after authentication is complete
-  const isLoading = isSignedIn && clerkUserId && (isPlantsLoading || isStatsLoading || isEnvironmentLoading || isTasksLoading);
+  const isLoading = isSignedIn && clerkUserId && (isPlantsLoading || isStatsLoading || isEnvironmentLoading || isCareTasksLoading);
 
   // Main loading state for the entire dashboard - only show after authentication is verified
   if (isSignedIn && clerkUserId && isLoading) {
@@ -209,75 +232,29 @@ export default function Dashboard() {
                       <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Today's Tasks</h3>
                     </div>
                   </div>
-                  
-                  {isTasksLoading ? (
+                  {isCareTasksLoading ? (
                     <AppLoader title="Loading Tasks" message="Fetching your care tasks..." size="small" variant="minimal" />
-                  ) : tasks && tasks.length > 0 ? (
-                    <>
+                  ) : totalTasks > 0 ? (
+                    <div>
                       <div className="flex justify-between items-center mb-4">
                         <div className="text-center">
-                          <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{tasks.length}</p>
+                          <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{totalTasks}</p>
                           <p className="text-sm text-gray-500 dark:text-gray-400">Total Tasks</p>
                         </div>
                         <div className="text-center">
                           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                            {tasks.filter(task => task.completed).length}
+                            {completedTasks}
                           </p>
                           <p className="text-sm text-gray-500 dark:text-gray-400">Completed</p>
                         </div>
                         <div className="text-center">
                           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                            {tasks.filter(task => !task.completed).length}
+                            {remainingTasks}
                           </p>
                           <p className="text-sm text-gray-500 dark:text-gray-400">Remaining</p>
                         </div>
                       </div>
-                      <div className="space-y-3 mt-2">
-                        {tasks.filter(task => !task.completed).map((task) => (
-                          <div 
-                            key={task.id} 
-                            className={`p-4 rounded-2xl ${task.taskType === 'water' ? "bg-white shadow" : "bg-[#1e2141]"} ${task.taskType === 'water' ? "text-gray-800" : "text-white"}`}
-                          >
-                            <div className="flex items-center mb-1">
-                              <div className="flex items-center">
-                                {task.taskType === 'water' ? (
-                                  <Droplet className="h-5 w-5 mr-2 text-blue-500" />
-                                ) : task.taskType === 'prune' ? (
-                                  <Leaf className="h-5 w-5 mr-2 text-green-300" />
-                                ) : (
-                                  <Sprout className="h-5 w-5 mr-2 text-green-300" />
-                                )}
-                                <h4 className="font-medium">
-                                  {task.taskType === 'water' ? 'Water the Plant' : 
-                                   task.taskType === 'prune' ? 'Cut the leaves' : 
-                                   task.taskType === 'fertilize' ? 'Add Fertilizer' : task.taskType}
-                                </h4>
-                              </div>
-                            </div>
-                            
-                            <p className={`text-sm ${task.taskType === 'water' ? "text-gray-500" : "text-gray-200 opacity-90"} mb-3`}>
-                              {task.plantName ? task.plantName : 'Your plant'}
-                            </p>
-                            <div className="flex justify-between mt-2">
-                              <button 
-                                onClick={() => skipTask.mutate(task.id)}
-                                className={task.taskType === 'water' ? 
-                                  "flex items-center justify-center px-3 py-1.5 bg-transparent border border-gray-400 text-sm font-medium rounded-md text-gray-600 opacity-80 hover:opacity-100 transition-opacity" :
-                                  "flex items-center justify-center px-3 py-1.5 bg-transparent border border-gray-500 text-sm font-medium rounded-md text-white opacity-80 hover:opacity-100 transition-opacity"}
-                              >
-                                <span className="mr-1">✕</span> Skip
-                              </button>
-                              <button 
-                                onClick={() => completeTask.mutate(task.id)}
-                                className="flex items-center justify-center px-3 py-1.5 bg-green-600 hover:bg-green-700 text-sm font-medium rounded-md text-white transition-colors"
-                              >
-                                <span className="mr-1">✓</span> Done
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
+                    </div>
                   ) : (
                     <p className="text-gray-600 dark:text-gray-300 mt-4">No tasks for today! Add some plants to get care tasks.</p>
                   )}
@@ -325,27 +302,51 @@ export default function Dashboard() {
                 <BrainCircuit className="h-7 w-7 mr-3 text-purple-500" />
                 <h2 className="text-2xl font-bold text-green-700 dark:text-green-400">Task Reminders</h2>
               </div>
-              {isCareTasksLoading ? (
-                <AppLoader title="Loading Reminders" message="Fetching your task reminders..." size="small" variant="minimal" />
-              ) : careTasks && careTasks.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4">
-                  {careTasks.map((task) => (
-                    <TaskReminder
+              <div className="space-y-3">
+                {pendingTasks.length === 0 ? (
+                  <div className="text-gray-600 dark:text-gray-300 italic">No pending tasks! Enjoy your day </div>
+                ) : (
+                  pendingTasks.map(task => (
+                    <div
                       key={task.id}
-                      plantId={task.plantId}
-                      wateringBenchmark={2} // Default to 2 days if not specified
-                      lastWateringDate={task.type === 'watering' ? task.dueDate : undefined}
-                      lastFertilizingDate={task.type === 'fertilizing' ? task.dueDate : undefined}
-                      lastPruningDate={task.type === 'pruning' ? task.dueDate : undefined}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-600 dark:text-gray-300">No pending reminders for today.</p>
-              )}
+                      className="transition-all duration-200 bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 neumorphic-card border border-gray-100 dark:border-slate-700 hover:shadow-2xl"
+                      style={{ boxShadow: '0 4px 24px rgba(60, 180, 120, 0.08), 0 1.5px 4px rgba(60, 180, 120, 0.12)' }}
+                    >
+                      <div className="flex items-center gap-5">
+                        <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 dark:from-slate-700 dark:to-slate-800 p-3 flex items-center justify-center shadow-inner">
+                          {task.taskType === 'watering' && <Droplet className="w-7 h-7 text-blue-500" />}
+                          {task.taskType === 'fertilizing' && <Sun className="w-7 h-7 text-yellow-500" />}
+                          {task.taskType === 'pruning' && <Scissors className="w-7 h-7 text-green-700" />}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-lg capitalize text-gray-900 dark:text-gray-100 mb-1">{task.taskType} <span className="text-base font-normal text-gray-500 dark:text-gray-300">for</span> {task.plantName}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">Due: {new Date(task.dueDate).toLocaleDateString()}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 mt-3 sm:mt-0">
+                        <Button
+                          className="rounded-xl px-5 py-2 font-semibold bg-gradient-to-r from-lime-400 to-emerald-500 text-white shadow-lg hover:from-lime-500 hover:to-emerald-600 focus:ring-2 focus:ring-lime-400 flex items-center gap-2 group transition-transform duration-150 active:scale-95"
+                          onClick={() => updateTask && updateTask({ taskId: task.id, updates: { status: 'done' } })}
+                        >
+                          <CheckCircle className="w-5 h-5 text-white group-hover:text-lime-200 group-hover:scale-125 group-active:scale-110 transition-all duration-200" />
+                          Done
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl px-5 py-2 font-semibold border-blue-400 dark:border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-900 shadow-sm flex items-center gap-2 group transition-transform duration-150 active:scale-95"
+                          onClick={() => updateTask && updateTask({ taskId: task.id, updates: { status: 'skipped' } })}
+                        >
+                          <Clock className="w-5 h-5 text-blue-500 group-hover:text-blue-400 group-hover:animate-pulse group-active:scale-110 transition-all duration-200" />
+                          Later
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
 
+          </div>
           {/* My Plants Section */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-green-700 dark:text-green-400 mb-8">

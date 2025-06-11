@@ -5,7 +5,6 @@ import {
   insertUserSchema, 
   insertPlantSchema, 
   insertEnvironmentReadingSchema, 
-  insertCareTaskSchema,
   insertCareHistorySchema,
   insertRecommendationSchema,
   insertPlantHealthMetricsSchema,
@@ -17,6 +16,7 @@ import { ZodError } from "zod";
 import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
 import { generatePlantRecommendations, generateAiCareTips, generateGeneralDashboardTip } from "./services/aiService"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
 import fetch from 'node-fetch'; // Or your preferred HTTP client
+import { insertPlantCareTaskSchema } from '@shared/schema';
 
 // Interface for the expected OpenMeteo API response structure
 interface OpenMeteoCurrentData {
@@ -111,8 +111,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const clerkUserId = req.auth.userId;
 
-      const plantId = parseInt(req.params.id, 10);
-      if (isNaN(plantId)) {
+      const plantId = req.params.id;
+      if (!plantId) {
         return res.status(400).json({ error: 'Invalid plant ID format.' });
       }
 
@@ -149,8 +149,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated' });
       }
 
-      const plantId = parseInt(req.params.id);
-      if (isNaN(plantId)) {
+      const plantId = req.params.id;
+      if (!plantId) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
@@ -205,7 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (aiTipString && typeof aiTipString === 'string') {
         tipsToSaveAndReturn.push({ category: "AI Reminder", tip: aiTipString });
         // Assuming storage.saveAiCareTips expects an array of objects with category and tip
-        await storage.saveAiCareTips(plantId, user.id, tipsToSaveAndReturn);
+        await storage.saveAiCareTips(plantId, user.id.toString(), tipsToSaveAndReturn);
       } else {
         // Handle the case where aiTipString is null or not a string (e.g., AI generation failed)
         // We can return an empty array or a specific message.
@@ -295,7 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
       }
 
-      const plants = await storage.getPlantsByUserId(appUser.id);
+      const plants = await storage.getPlantsByUserId(appUser.id.toString());
       return res.json(plants);
     } catch (error) {
       return handleError(res, error);
@@ -304,8 +304,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/plants/:id', async (req, res) => {
     try {
-      const plantId = parseInt(req.params.id);
-      if (isNaN(plantId)) {
+      const plantId = req.params.id;
+      if (!plantId) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
@@ -337,8 +337,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const clerkId = req.auth.userId;
 
-      const plantId = parseInt(req.params.id);
-      if (isNaN(plantId)) {
+      const plantId = req.params.id;
+      if (!plantId) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
@@ -371,7 +371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fetch latest environment data for the user
       // This might not have soil_moisture_0_to_10cm, which generatePlantRecommendations uses.
       // We'll pass what we have. The AI service might need to handle missing data gracefully.
-      const latestEnvReading = await storage.getLatestEnvironmentReadingByUserId(appUser.id);
+      const latestEnvReading = await storage.getLatestEnvironmentReadingByUserId(appUser.id.toString());
 
       const environmentForAi: EnvironmentData = {
         temperature: latestEnvReading?.temperature ?? null,
@@ -514,27 +514,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const plant = await storage.createPlant(plantDataForDb);
       console.log(`[routes.ts] POST /api/plants - Plant object received from storage.createPlant: ${JSON.stringify(plant)}`);
 
-      // Generate and store recommendations for the new plant
+      // Create initial care tasks and recommendations for the new plant
       if (plant && plant.id) {
-        const environmentForNewPlant: EnvironmentData = {
-          temperature: 22, // Example default, consider fetching or allowing user input
-          humidity: 50,    // Example default
-          lightLevel: "medium" // Example default
-        };
-        const plantForAi: PlantData = {
-          name: plant.name,
-          species: plant.species,
-          waterFrequencyDays: plant.waterFrequencyDays,
-          // TODO: Confirm if plant object from storage.getPlantById() consistently includes lightRequirement.
-          lastWatered: plant.lastWatered,
-        };
-
         try {
+          // Create watering task
+          const wateringDueDate = new Date();
+          wateringDueDate.setDate(wateringDueDate.getDate() + 7); // Due in 7 days
+          await storage.createPlantCareTask({
+            plantId: plant.id.toString(),
+            type: 'watering',
+            dueDate: wateringDueDate,
+            status: 'pending'
+          });
+
+          // Create fertilizing task
+          const fertilizingDueDate = new Date();
+          fertilizingDueDate.setDate(fertilizingDueDate.getDate() + 30); // Due in 30 days
+          await storage.createPlantCareTask({
+            plantId: plant.id.toString(),
+            type: 'fertilizing',
+            dueDate: fertilizingDueDate,
+            status: 'pending'
+          });
+
+          // Create pruning task
+          const pruningDueDate = new Date();
+          pruningDueDate.setDate(pruningDueDate.getDate() + 90); // Due in 90 days
+          await storage.createPlantCareTask({
+            plantId: plant.id.toString(),
+            type: 'pruning',
+            dueDate: pruningDueDate,
+            status: 'pending'
+          });
+
+          console.log(`[routes.ts] POST /api/plants - Successfully created initial care tasks for plant ID: ${plant.id}`);
+
+          // Generate and store recommendations
+          const environmentForNewPlant: EnvironmentData = {
+            temperature: 22, // Example default, consider fetching or allowing user input
+            humidity: 50,    // Example default
+            lightLevel: "medium" // Example default
+          };
+          const plantForAi: PlantData = {
+            name: plant.name,
+            species: plant.species,
+            waterFrequencyDays: plant.waterFrequencyDays,
+            lastWatered: plant.lastWatered,
+          };
+
           const recommendations = await generatePlantRecommendations(plantForAi, environmentForNewPlant);
           if (recommendations && recommendations.length > 0 && appUser && appUser.id) {
             for (const rec of recommendations) {
               await storage.createRecommendation({
-                userId: appUser.id, // Use appUser.id from the authenticated user
+                userId: appUser.id,
                 plantId: plant.id,
                 recommendationType: rec.recommendationType,
                 message: rec.message,
@@ -544,9 +576,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             console.log(`[routes.ts] POST /api/plants - No recommendations generated or appUser.id missing for plant ID: ${plant.id}`);
           }
-        } catch (recError) {
-          console.error(`[routes.ts] POST /api/plants - Error generating or storing recommendations for plant ID: ${plant.id}:`, recError);
-          // Decide if this error should affect the response. For now, we'll log it and continue.
+        } catch (error) {
+          console.error(`[routes.ts] POST /api/plants - Error creating initial tasks/recommendations for plant ID: ${plant.id}:`, error);
+          // Don't fail the request if task/recommendation creation fails, but log it
         }
       }
       
@@ -559,8 +591,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/plants/:id', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const plantId = parseInt(req.params.id);
-      if (isNaN(plantId)) {
+      const plantId = req.params.id;
+      if (!plantId) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
@@ -607,8 +639,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete('/api/plants/:id', async (req, res) => {
     try {
-      const plantId = parseInt(req.params.id);
-      if (isNaN(plantId)) {
+      const plantId = req.params.id;
+      if (!plantId) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
@@ -639,8 +671,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/plants/:id/health', ClerkExpressRequireAuth(), async (req: any, res) => {
     try {
-      const plantId = parseInt(req.params.id);
-      if (isNaN(plantId)) {
+      const plantId = req.params.id;
+      if (!plantId) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
@@ -666,8 +698,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.auth || !req.auth.userId) {
         return res.status(401).json({ error: 'Unauthorized', details: 'User not authenticated for GET /api/plants/:id/ai-care-tips' });
       }
-      const plantId = parseInt(req.params.id);
-      if (isNaN(plantId)) {
+      const plantId = req.params.id;
+      if (!plantId) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
@@ -677,7 +709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: 'User not found in local database.' });
       }
 
-      const savedTips = await storage.getAiCareTips(plantId, appUser.id); 
+      const savedTips = await storage.getAiCareTips(plantId, appUser.id.toString()); 
       console.log('[routes.ts] GET /api/plants/' + plantId + '/ai-care-tips - Fetched tips:', savedTips);
       return res.json(savedTips);
     } catch (error) {
@@ -736,7 +768,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
       }
 
-      const readings = await storage.getLatestEnvironmentReadingByUserId(appUser.id);
+      const readings = await storage.getLatestEnvironmentReadingByUserId(appUser.id.toString());
       return res.json(readings || {});
     } catch (error) {
       return handleError(res, error);
@@ -768,7 +800,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Validate the rest of the body, ensuring userId from body is NOT used or matches appUser.id
-      const { data, error } = validateBody(insertEnvironmentReadingSchema, { ...req.body, userId: appUser.id });
+      const { data, error } = validateBody(insertEnvironmentReadingSchema, { ...req.body, userId: appUser.id.toString() });
       if (error) {
         return res.status(400).json({ error: 'Invalid environment data', details: error });
       }
@@ -776,7 +808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const reading = await storage.createEnvironmentReading(data); // data now includes the correct appUser.id
       
       // Generate recommendations based on the new reading, using the correct appUser.id
-      await storage.generateRecommendations(appUser.id);
+      await storage.generateRecommendations(appUser.id.toString());
       
       return res.status(201).json(reading);
     } catch (error) {
@@ -808,8 +840,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
       }
 
-      const tasks = await storage.getCareTasksByUserId(appUser.id);
-      return res.json(tasks);
+      const plantCareTasks = await storage.getPlantCareTasksByUserId(appUser.id.toString());
+      return res.json(plantCareTasks);
     } catch (error) {
       return handleError(res, error);
     }
@@ -837,13 +869,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Ensure userId in body is from authenticated user
-      const { data, error } = validateBody(insertCareTaskSchema, { ...req.body, userId: appUser.id });
+      const { data, error } = validateBody(insertPlantCareTaskSchema, { ...req.body, userId: appUser.id.toString() });
       if (error) {
         return res.status(400).json({ error: 'Invalid care task data', details: error });
       }
 
-      const task = await storage.createCareTask(data); // data now includes the correct appUser.id
-      return res.status(201).json(task);
+      const plantCareTask = await storage.createPlantCareTask(data); // data now includes the correct appUser.id
+      return res.status(201).json(plantCareTask);
     } catch (error) {
       return handleError(res, error);
     }
@@ -858,21 +890,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // const clerkId = req.auth.userId; // Potentially use for authorization check
 
-      const taskId = parseInt(req.params.id);
-      if (isNaN(taskId)) {
+      const taskId = req.params.id;
+      if (!taskId) {
         return res.status(400).json({ error: 'Valid task ID is required' });
       }
 
       // TODO: Add authorization check: ensure task belongs to authenticated user
 
-      const task = await storage.completeCareTask(taskId);
-      if (!task) {
+      const completedTask = await storage.completePlantCareTask(taskId.toString());
+      if (!completedTask) {
         return res.status(404).json({ error: 'Care task not found' });
       }
 
       // If it's a watering task, update the plant's last watered date
-      if (task.taskType === 'water') {
-        const plant = await storage.getPlantById(task.plantId);
+      if (completedTask.type === 'water') {
+        const plant = await storage.getPlantById(completedTask.plantId);
         if (plant) {
           const {
             acquiredDate,
@@ -887,7 +919,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastWatered: new Date(), // Update to current time when watering task is done
           };
 
-          await storage.updatePlant(plant.id, updatePayload);
+          await storage.updatePlant(plant.id.toString(), updatePayload);
           
           // Add to care history
           await storage.createCareHistory({
@@ -897,11 +929,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           
           // Update plant health metrics
-          await storage.updatePlantHealthMetrics(plant.id);
+          await storage.updatePlantHealthMetrics(plant.id.toString());
         }
       }
 
-      return res.json(task);
+      return res.json(completedTask);
     } catch (error) {
       return handleError(res, error);
     }
@@ -915,19 +947,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // const clerkId = req.auth.userId; // Potentially use for authorization check
 
-      const taskId = parseInt(req.params.id);
-      if (isNaN(taskId)) {
+      const taskId = req.params.id;
+      if (!taskId) {
         return res.status(400).json({ error: 'Valid task ID is required' });
       }
 
       // TODO: Add authorization check: ensure task belongs to authenticated user
 
-      const task = await storage.skipCareTask(taskId);
-      if (!task) {
+      const skippedTask = await storage.skipPlantCareTask(taskId.toString());
+      if (!skippedTask) {
         return res.status(404).json({ error: 'Care task not found' });
       }
 
-      return res.json(task);
+      return res.json(skippedTask);
     } catch (error) {
       return handleError(res, error);
     }
@@ -957,7 +989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
       }
 
-      const recommendations = await storage.getRecommendationsByUserId(appUser.id);
+      const recommendations = await storage.getRecommendationsByUserId(appUser.id.toString());
       return res.json(recommendations);
     } catch (error) {
       return handleError(res, error);
@@ -993,8 +1025,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // }
 
       // Assuming generateRecommendations now takes the internal appUser.id
-      await storage.generateRecommendations(appUser.id);
-      const recommendations = await storage.getRecommendationsByUserId(appUser.id);
+      await storage.generateRecommendations(appUser.id.toString());
+      const recommendations = await storage.getRecommendationsByUserId(appUser.id.toString());
       
       return res.json({ 
         success: true,
@@ -1009,12 +1041,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/recommendations/:id/apply', async (req, res) => {
     try {
-      const recId = parseInt(req.params.id);
-      if (isNaN(recId)) {
+      const recId = req.params.id;
+      if (!recId) {
         return res.status(400).json({ error: 'Valid recommendation ID is required' });
       }
 
-      const recommendation = await storage.applyRecommendation(recId);
+      const recommendation = await storage.applyRecommendation(recId.toString());
       if (!recommendation) {
         return res.status(404).json({ error: 'Recommendation not found' });
       }
@@ -1028,8 +1060,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Plant health metrics routes
   app.get('/api/plants/:id/health', async (req, res) => {
     try {
-      const plantId = parseInt(req.params.id);
-      if (isNaN(plantId)) {
+      const plantId = req.params.id;
+      if (!plantId) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 
@@ -1068,7 +1100,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Failed to retrieve local user record for authenticated user' });
       }
 
-      const stats = await storage.getDashboardStats(appUser.id);
+      const stats = await storage.getDashboardStats(appUser.id.toString());
       // Ensure the user's name is included, preferring Clerk's first name if available
       const userName = appUser.name || clerkUser.firstName || appUser.username || 'User';
       
@@ -1081,8 +1113,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Care history routes
   app.get('/api/plants/:plantId/care-history', async (req, res) => {
     try {
-      const plantId = parseInt(req.params.plantId);
-      if (isNaN(plantId)) {
+      const plantId = req.params.plantId;
+      if (!plantId) {
         return res.status(400).json({ error: 'Valid plant ID is required' });
       }
 

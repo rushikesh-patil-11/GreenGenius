@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"; // Added useEffect
-import { Plus, Thermometer, Droplet, Sun, Sprout, BarChartHorizontalBig, BrainCircuit, Leaf, Wind, Scissors } from "lucide-react";
+import { Plus, Thermometer, Droplet, Sun, Sprout, BarChartHorizontalBig, BrainCircuit, Leaf, Wind, Scissors, CheckCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
@@ -307,19 +307,38 @@ export default function Dashboard() {
                   <div className="text-gray-600 dark:text-gray-300 italic">No pending tasks! Enjoy your day </div>
                 ) : (
                   pendingTasks.map(task => (
-                    <div key={task.id} className="bg-white dark:bg-slate-700 rounded-lg shadow flex items-center justify-between p-4">
-                      <div className="flex items-center gap-3">
-                        {/* Type icon */}
-                        {task.taskType === 'watering' && <Droplet className="w-5 h-5 text-blue-500" />}
-                        {task.taskType === 'fertilizing' && <Sun className="w-5 h-5 text-yellow-500" />}
-                        {task.taskType === 'pruning' && <Scissors className="w-5 h-5 text-green-700" />}
+                    <div
+                      key={task.id}
+                      className="transition-all duration-200 bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 neumorphic-card border border-gray-100 dark:border-slate-700 hover:shadow-2xl"
+                      style={{ boxShadow: '0 4px 24px rgba(60, 180, 120, 0.08), 0 1.5px 4px rgba(60, 180, 120, 0.12)' }}
+                    >
+                      <div className="flex items-center gap-5">
+                        <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-green-100 dark:from-slate-700 dark:to-slate-800 p-3 flex items-center justify-center shadow-inner">
+                          {task.taskType === 'watering' && <Droplet className="w-7 h-7 text-blue-500" />}
+                          {task.taskType === 'fertilizing' && <Sun className="w-7 h-7 text-yellow-500" />}
+                          {task.taskType === 'pruning' && <Scissors className="w-7 h-7 text-green-700" />}
+                        </div>
                         <div>
-                          <div className="font-semibold capitalize text-gray-800 dark:text-gray-100">{task.taskType} <span className="text-sm font-normal text-gray-500 dark:text-gray-300">for</span> {task.plantName}</div>
+                          <div className="font-semibold text-lg capitalize text-gray-900 dark:text-gray-100 mb-1">{task.taskType} <span className="text-base font-normal text-gray-500 dark:text-gray-300">for</span> {task.plantName}</div>
                           <div className="text-xs text-gray-500 dark:text-gray-400">Due: {new Date(task.dueDate).toLocaleDateString()}</div>
                         </div>
                       </div>
-                      <div>
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300 capitalize">{task.status}</span>
+                      <div className="flex items-center gap-3 mt-3 sm:mt-0">
+                        <Button
+                          className="rounded-xl px-5 py-2 font-semibold bg-gradient-to-r from-lime-400 to-emerald-500 text-white shadow-lg hover:from-lime-500 hover:to-emerald-600 focus:ring-2 focus:ring-lime-400 flex items-center gap-2 group transition-transform duration-150 active:scale-95"
+                          onClick={() => updateTask && updateTask({ taskId: task.id, updates: { status: 'done' } })}
+                        >
+                          <CheckCircle className="w-5 h-5 text-white group-hover:text-lime-200 group-hover:scale-125 group-active:scale-110 transition-all duration-200" />
+                          Done
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="rounded-xl px-5 py-2 font-semibold border-blue-400 dark:border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-900 shadow-sm flex items-center gap-2 group transition-transform duration-150 active:scale-95"
+                          onClick={() => updateTask && updateTask({ taskId: task.id, updates: { status: 'skipped' } })}
+                        >
+                          <Clock className="w-5 h-5 text-blue-500 group-hover:text-blue-400 group-hover:animate-pulse group-active:scale-110 transition-all duration-200" />
+                          Later
+                        </Button>
                       </div>
                     </div>
                   ))
@@ -328,7 +347,6 @@ export default function Dashboard() {
             </div>
 
           </div>
-
           {/* My Plants Section */}
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-green-700 dark:text-green-400 mb-8">

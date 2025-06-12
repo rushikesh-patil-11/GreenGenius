@@ -54,13 +54,14 @@ export function PlantsList({ plants, healthMetrics, loading = false }: PlantsLis
 
   return (
     <div className="mb-8">
-      <div className="flex items-center justify-end mb-4">
-        <Link to="/plants">
-          <Button variant="link" className="text-secondary">
-            View All <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </Link>
-      </div>
+      <div className="flex items-center justify-between mb-4">
+      <h2 className="text-lg font-semibold text-primary">🌿 Welcome to Your Green Space</h2>
+      <Link to="/plants">
+        <Button variant="link" className="text-secondary">
+          View All <ChevronRight className="h-4 w-4 ml-1" />
+        </Button>
+      </Link>
+    </div>
       
       {filteredPlants.length === 0 ? (
         <div className="text-center py-8 bg-white dark:bg-card rounded-lg shadow-sm">

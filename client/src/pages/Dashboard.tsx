@@ -331,14 +331,7 @@ export default function Dashboard() {
                           <CheckCircle className="w-5 h-5 text-white group-hover:text-lime-200 group-hover:scale-125 group-active:scale-110 transition-all duration-200" />
                           Done
                         </Button>
-                        <Button
-                          variant="outline"
-                          className="rounded-xl px-5 py-2 font-semibold border-blue-400 dark:border-blue-600 text-blue-700 dark:text-blue-300 bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-blue-900 shadow-sm flex items-center gap-2 group transition-transform duration-150 active:scale-95"
-                          onClick={() => updateTask && updateTask({ taskId: task.id, updates: { status: 'skipped' } })}
-                        >
-                          <Clock className="w-5 h-5 text-blue-500 group-hover:text-blue-400 group-hover:animate-pulse group-active:scale-110 transition-all duration-200" />
-                          Later
-                        </Button>
+                        
                       </div>
                     </div>
                   ))

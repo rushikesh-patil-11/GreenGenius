@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"; // Added useEffect
 import { Plus, Thermometer, Droplet, Sun, Sprout, BarChartHorizontalBig, BrainCircuit, Leaf, Wind, Scissors, CheckCircle, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import LottieDoneIcon from "@/components/ui/LottieDoneIcon";
 import Sidebar from "@/components/layout/Sidebar";
 import MobileNavigation from "@/components/layout/MobileNavigation";
 import PlantsList from "@/components/plants/PlantsList";
@@ -325,11 +326,11 @@ export default function Dashboard() {
                       </div>
                       <div className="flex items-center gap-3 mt-3 sm:mt-0">
                         <Button
-                          className="rounded-xl px-5 py-2 font-semibold bg-gradient-to-r from-lime-400 to-emerald-500 text-white shadow-lg hover:from-lime-500 hover:to-emerald-600 focus:ring-2 focus:ring-lime-400 flex items-center gap-2 group transition-transform duration-150 active:scale-95"
+                          className="rounded-xl p-2 flex items-center justify-center group transition-transform duration-150 active:scale-95 focus:ring-2 focus:ring-neutral-400 bg-transparent"
                           onClick={() => updateTask && updateTask({ taskId: task.id, updates: { status: 'done' } })}
+                          aria-label="Mark as done"
                         >
-                          <CheckCircle className="w-5 h-5 text-white group-hover:text-lime-200 group-hover:scale-125 group-active:scale-110 transition-all duration-200" />
-                          Done
+                          <LottieDoneIcon className="w-14 h-14 " />
                         </Button>
                         
                       </div>

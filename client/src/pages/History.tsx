@@ -178,12 +178,7 @@ export default function HistoryPage() {
                   <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{logs.length}</div>
                   <div className="text-xs text-slate-500 dark:text-slate-400">Total Activities</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    {logs.filter(log => log.actionType.toLowerCase() === 'watered').length}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Waterings</div>
-                </div>
+                
               </div>
             </div>
             

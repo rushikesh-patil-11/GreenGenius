@@ -71,14 +71,8 @@ export function Sidebar() {
           <NavItem path="/plants" icon={<Leaf className="w-5 h-5" />} label="My Plants" />
           <NavItem path="/history" icon={<Clock className="w-5 h-5" />} label="Care History" />
         </div>
-        <motion.div 
-          className="pt-6 mt-6 border-t border-gray-200 dark:border-gray-800/30"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
-          <NavItem path="/settings" icon={<Settings className="w-5 h-5" />} label="Settings" />
-        </motion.div>
+        
+       
       </nav>
     </motion.aside>
   );

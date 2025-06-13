@@ -39,23 +39,52 @@ export default function Plants() {
 
   if (isLoading) {
     return (
-      <div className="container py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">My Plants</h1>
-          <Button 
-            className="bg-primary hover:bg-primary-light text-white"
-            onClick={handleOpenAddPlantModal}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Add Plant
-          </Button>
+      <div className="flex h-screen bg-background">
+        {/* Sidebar for desktop */}
+        <div className="hidden md:flex md:w-64 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-700/60">
+          <Sidebar />
         </div>
-        <div className="flex justify-center items-center py-12">
-          <AppLoader 
-            title="Loading Your Garden" 
-            message="Gathering information about your plants..." 
-            size="large" 
-            variant="default"
-          />
+        
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto pb-16">
+          <div className="p-6 md:p-8">
+            {/* Page Header */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold font-poppins text-textColor dark:text-foreground">
+                  My Plants
+                </h1>
+                <p className="text-muted-foreground mt-1">
+                  Manage and track all your plants in one place
+                </p>
+              </div>
+              <div className="mt-4 md:mt-0">
+                <Button 
+                  className="bg-primary hover:bg-primary-light text-white"
+                  onClick={handleOpenAddPlantModal}
+                  disabled
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  <span>Add Plant</span>
+                </Button>
+              </div>
+            </div>
+            
+            {/* Loader */}
+            <div className="flex justify-center items-center py-16">
+              <AppLoader 
+                title="Loading Your Garden" 
+                message="Gathering information about your plants..." 
+                size="large" 
+                variant="default"
+              />
+            </div>
+          </div>
+        </main>
+        
+        {/* Mobile Navigation */}
+        <div className="md:hidden block">
+          <MobileNavigation />
         </div>
       </div>
     );
@@ -63,11 +92,13 @@ export default function Plants() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Desktop Sidebar */}
-      <Sidebar />
+      {/* Sidebar for desktop */}
+      <div className="hidden md:flex md:w-64 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-700/60">
+        <Sidebar />
+      </div>
       
       {/* Main Content */}
-      <main className="main-content flex-1 overflow-y-auto pb-16">
+      <main className="flex-1 overflow-y-auto pb-16">
         <div className="p-6 md:p-8">
           {/* Page Header */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
@@ -150,7 +181,9 @@ export default function Plants() {
       </main>
       
       {/* Mobile Navigation */}
-      <MobileNavigation />
+      <div className="md:hidden block">
+        <MobileNavigation />
+      </div>
       
       {/* Add Plant Modal */}
       <AddPlantModal 

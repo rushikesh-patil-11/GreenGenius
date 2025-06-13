@@ -196,23 +196,35 @@ export default function PlantDetails() {
 
   if (isLoading) {
     return (
-      <div className="container py-12 flex justify-center items-center min-h-[50vh]">
-        <AppLoader 
-          title="Loading Plant Details" 
-          message="Gathering information about your plant..." 
-          size="large" 
-          variant="default"
-        />
-        <MobileNavigation />
+      <div className="flex min-h-screen bg-gradient-to-br from-background to-background-muted dark:from-gray-900 dark:to-gray-800">
+        {/* Sidebar for desktop */}
+        <div className="hidden md:flex md:w-64 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-700/60">
+          <Sidebar />
+        </div>
+        <main className="flex-1 overflow-y-auto pb-16 font-sans flex items-center justify-center">
+          <AppLoader 
+            title="Loading Plant Details" 
+            message="Gathering information about your plant..." 
+            size="large" 
+            variant="default"
+          />
+        </main>
+        {/* Mobile Navigation */}
+        <div className="md:hidden block">
+          <MobileNavigation />
+        </div>
       </div>
     );
   }
   
   if (error || !plant) {
     return (
-      <div className="flex h-screen bg-background">
-        <Sidebar />
-        <main className="main-content flex-1 overflow-y-auto pb-16">
+      <div className="flex min-h-screen bg-gradient-to-br from-background to-background-muted dark:from-gray-900 dark:to-gray-800">
+        {/* Sidebar for desktop */}
+        <div className="hidden md:flex md:w-64 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-700/60">
+          <Sidebar />
+        </div>
+        <main className="flex-1 overflow-y-auto pb-16 font-sans flex items-center justify-center">
           <div className="p-6 md:p-8">
             <Link href="/plants">
               <Button variant="ghost" className="mb-8">
@@ -235,7 +247,10 @@ export default function PlantDetails() {
             </Card>
           </div>
         </main>
-        <MobileNavigation />
+        {/* Mobile Navigation */}
+        <div className="md:hidden block">
+          <MobileNavigation />
+        </div>
       </div>
     );
   }
@@ -343,8 +358,11 @@ export default function PlantDetails() {
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-background to-background-muted dark:from-gray-900 dark:to-gray-800">
-      <Sidebar />
-      <main className="main-content flex-1 overflow-y-auto pb-16 font-sans">
+      {/* Sidebar for desktop */}
+      <div className="hidden md:flex md:w-64 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-700/60">
+        <Sidebar />
+      </div>
+      <main className="flex-1 overflow-y-auto pb-16 font-sans">
         <div className="p-4 md:p-8 max-w-5xl mx-auto">
           <Link href="/plants" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6 group">
             <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />

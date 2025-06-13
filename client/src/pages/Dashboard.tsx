@@ -149,8 +149,11 @@ export default function Dashboard() {
   if (isSignedIn && clerkUserId && isLoading) {
     return (
       <div className="flex h-screen bg-emerald-50 dark:bg-gray-900">
-        <Sidebar />
-        <main className="main-content flex-1 overflow-y-auto pb-20 bg-emerald-50 dark:bg-gray-900 flex items-center justify-center">
+        {/* Sidebar for desktop */}
+        <div className="hidden md:flex md:w-64 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-700/60">
+          <Sidebar />
+        </div>
+        <main className="flex-1 overflow-y-auto pb-20 bg-emerald-50 dark:bg-gray-900 flex items-center justify-center">
           <AppLoader 
             title="Loading Dashboard" 
             message="Gathering all your plant data and insights..." 
@@ -158,16 +161,22 @@ export default function Dashboard() {
             variant="default"
           />
         </main>
-        <MobileNavigation />
+        {/* Mobile Navigation */}
+        <div className="md:hidden block">
+          <MobileNavigation />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex h-screen bg-emerald-50 dark:bg-gray-900">
-      <Sidebar />
+      {/* Sidebar for desktop */}
+      <div className="hidden md:flex md:w-64 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-r border-slate-200/60 dark:border-slate-700/60">
+        <Sidebar />
+      </div>
 
-      <main className="main-content flex-1 overflow-y-auto pb-20 bg-emerald-50 dark:bg-gray-900">
+      <main className="flex-1 overflow-y-auto pb-20 bg-emerald-50 dark:bg-gray-900">
         <div className="p-6 md:p-8">
           {/* New Dashboard Header: Greeting and Weather */}
           <div className="mb-8 p-6 rounded-xl bg-green-100 dark:bg-gray-800 shadow-sm flex flex-col md:flex-row justify-between md:items-start">
@@ -356,7 +365,10 @@ export default function Dashboard() {
         </div>
       </main>
       
-      <MobileNavigation />
+      {/* Mobile Navigation */}
+      <div className="md:hidden block">
+        <MobileNavigation />
+      </div>
       
       <AddPlantModal 
         isOpen={isAddPlantModalOpen}

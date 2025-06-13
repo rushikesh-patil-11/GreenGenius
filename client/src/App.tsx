@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import Plants from "@/pages/Plants";
 import PlantDetails from "@/pages/PlantDetails";
 import Landing from "@/pages/Landing";
+import History from "@/pages/History";
 import {
   SignedIn,
   SignedOut,
@@ -75,10 +76,11 @@ const ThemeToggleButton: React.FC = () => {
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={LandingPageOrRedirect} /> 
+      <Route path="/" component={LandingPageOrRedirect} />
       <ProtectedRoute path="/dashboard" component={Dashboard} />
       <ProtectedRoute path="/plants" component={Plants} />
       <ProtectedRoute path="/plants/:id" component={PlantDetails} />
+      <ProtectedRoute path="/history" component={History} /> // Use History directly in the router
       <Route component={NotFound} />
     </Switch>
   );

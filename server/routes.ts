@@ -56,7 +56,11 @@ function getSeason(date: Date): string {
   return "Winter"; // Dec, Jan, Feb
 }
 
+import historyRouter from "./routes/history";
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Register plant activity history API endpoint
+  app.use("/api/history", historyRouter);
   // Helper function to validate request body
   function validateBody(schema: any, body: any) {
     try {

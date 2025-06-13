@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 import { ClerkExpressRequireAuth, ClerkExpressWithAuth, clerkClient, type RequireAuthProp } from '@clerk/clerk-sdk-node';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import historyRouter from "./routes/history";
 import { initializeDatabase } from "./storage";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -626,6 +627,9 @@ app.post('/api/plants', ClerkExpressRequireAuth(), async (req: Request, res: Res
     return next(error); // General fallback
   }
 });
+
+// Register new plant activity history API endpoint
+app.use("/api/history", historyRouter);
 
 app.use((req, res, next) => {
   const start = Date.now();

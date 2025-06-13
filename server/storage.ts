@@ -118,6 +118,7 @@ export interface IStorage {
 
   // Care history operations
   getCareHistoryByPlantId(plantId: string): Promise<CareHistory[]>;
+  getAllUserCareHistory(userId: number): Promise<CareHistory[]>;
   createCareHistory(history: InsertCareHistory): Promise<CareHistory>;
 
   // Plant health metrics
@@ -134,6 +135,8 @@ export interface IStorage {
 
 // Database storage implementation
 export class DbStorage implements IStorage {
+  // Helper to get all care history for a user's plants (e.g., for a full activity feed)
+ 
   // Use a getter to ensure the db instance is accessed only after initialization
   private get db(): PostgresJsDatabase<typeof schema> {
     if (!globalDbInstance) {

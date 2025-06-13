@@ -16,20 +16,21 @@ router.get("/", async (req, res) => {
 
     // Debug: Log user.id value and type
     console.log('[GET /api/history] user.id:', user.id, 'type:', typeof user.id);
-    // Fetch all care history logs for the user
-    const careHistory = await storage.getAllUserCareHistory(user.id);
+    // Fetch all completed/skipped plant care tasks for the user
+    const careTasks = await storage.getPlantCareTasksByUserId(user.id.toString());
+    const filteredTasks = careTasks.filter(task => task.status === 'completed' || task.status === 'skipped');
 
     // Enrich with plant info (name, image, acquiredDate, lastWatered)
     const logs = await Promise.all(
-      careHistory.map(async (log) => {
-        const plant = await storage.getPlantById(log.plantId.toString());
+      filteredTasks.map(async (task) => {
+        const plant = await storage.getPlantById(task.plantId.toString());
         return {
-          id: log.id,
+          id: task.id,
           plantName: plant?.name || "Unknown Plant",
           plantImage: plant?.api_image_url || undefined,
-          actionType: log.actionType,
-          actionTime: log.performedAt,
-          notes: log.notes || undefined,
+          actionType: task.type,
+          actionTime: task.completedAt || task.updatedAt || task.dueDate,
+          notes: undefined, // plant_care_tasks does not have notes by default
           dateAdded: plant?.acquiredDate || undefined,
           lastWatered: plant?.lastWatered || undefined,
         };

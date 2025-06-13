@@ -23,10 +23,10 @@ import {
 import { cn } from "@/lib/utils";
 
 interface ActivityLog {
-  id: number;
+  id: string;
   plantName: string;
   actionType: string;
-  actionTime: string;
+  actionTime: string | Date;
   notes?: string;
   dateAdded?: string;
   lastWatered?: string;
@@ -128,8 +128,8 @@ export default function HistoryPage() {
     }
   };
 
-  const getTimeAgo = (dateString: string) => {
-    const date = new Date(dateString);
+  const getTimeAgo = (dateInput: string | Date) => {
+    const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
     const now = new Date();
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
     
@@ -285,9 +285,6 @@ export default function HistoryPage() {
                               size={56}
                             />
                           </div>
-                          <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white dark:bg-slate-900 rounded-full flex items-center justify-center shadow-sm">
-                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">#{log.id}</span>
-                          </div>
                         </div>
                         
                         {/* Content */}
@@ -317,7 +314,7 @@ export default function HistoryPage() {
                               <Clock className="w-4 h-4" />
                               <span className="font-medium">{getTimeAgo(log.actionTime)}</span>
                               <span className="text-slate-400 dark:text-slate-500">•</span>
-                              <span className="text-sm">{new Date(log.actionTime).toLocaleString()}</span>
+                              <span className="text-sm">{new Date(log.actionTime).toLocaleDateString()}</span>
                             </div>
                             
                             {log.notes && (

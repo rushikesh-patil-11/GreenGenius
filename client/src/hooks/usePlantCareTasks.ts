@@ -29,16 +29,22 @@ export function usePlantCareTasks(plantId?: string) {
       })) as PlantCareTask[];
     },
   });
+  const updateTaskMutation = useMutation({    mutationFn: async ({ taskId, updates }: { taskId: string; updates: Partial<PlantCareTask> }) => {
+      // Transform the updates to match database column names
+      const dbUpdates: any = {
+        status: updates.status === 'done' ? 'completed' : updates.status,
+      };
+      if (updates.dueDate) dbUpdates.due_date = updates.dueDate.toISOString();
+      // Always set completed_at when status is 'done' or 'completed'
+      if (updates.status === 'done' || updates.status === 'completed') {
+        dbUpdates.completed_at = new Date().toISOString();
+      } else if (updates.status === 'pending' || updates.status === 'skipped') {
+        dbUpdates.completed_at = null; // Clear completed_at if task is not completed
+      }
 
-  const updateTaskMutation = useMutation({
-    mutationFn: async ({ taskId, updates }: { taskId: string; updates: Partial<PlantCareTask> }) => {
       const { error } = await supabase
         .from('plant_care_tasks')
-        .update({
-          ...updates,
-          due_date: updates.dueDate?.toISOString(),
-          completed_at: updates.completedAt?.toISOString(),
-        })
+        .update(dbUpdates)
         .eq('id', taskId);
 
       if (error) throw error;

@@ -1,6 +1,6 @@
 import { useState, useEffect, ElementType } from "react";
 import { useParams, Link, useLocation } from "wouter";
-import { ArrowLeft, Droplet, Sun, Heart, Edit, Trash2, AlertTriangle, MoreHorizontal, Sparkles, RefreshCcw, Globe, Info, BookOpen, ClipboardList, AlertCircle, Leaf as LeafIcon, Thermometer, Scissors, ShieldCheck, Zap, Loader2 } from "lucide-react";
+import { ArrowLeft, Droplet, Sun, Heart, Edit, Trash2, AlertTriangle, Sparkles, RefreshCcw, Globe, Info, BookOpen, ClipboardList, AlertCircle, Leaf as LeafIcon, Thermometer, Scissors, ShieldCheck, Zap, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AppLoader from "@/components/ui/AppLoader";
 import Sidebar from "@/components/layout/Sidebar";
@@ -11,7 +11,6 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { usePlantDetails } from "@/hooks/usePlants";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatDate, formatNextWatering, getHealthStatus } from "@/lib/utils";
 import { apiRequest } from "@/lib/apiRequest";
 import { queryClient } from "@/lib/queryClient";
@@ -375,26 +374,16 @@ export default function PlantDetails() {
               <p className="text-md sm:text-lg text-gray-300 italic">
                 {perenualPlantDetails?.scientific_name?.join(', ') || 'Scientific name not available'}
               </p>
-            </div>
-            <div className="absolute top-4 right-4">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 bg-black/30 hover:bg-black/50 text-white">
-                    <MoreHorizontal className="h-5 w-5" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-2" align="end">
-                  <div className="flex flex-col space-y-1">
-                    <Button
-                      variant="ghost"
-                      className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 text-sm h-9 font-normal"
-                      onClick={() => setIsDeleteDialogOpen(true)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" /> Delete Plant
-                    </Button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+            </div>            <div className="absolute top-4 right-4">
+              <Button
+                variant="destructive"
+                size="icon"
+                className="rounded-full h-10 w-10 shadow-md hover:bg-destructive/90"
+                onClick={() => setIsDeleteDialogOpen(true)}
+                title="Delete Plant"
+              >
+                <Trash2 className="h-5 w-5" />
+              </Button>
             </div>
           </div>
 

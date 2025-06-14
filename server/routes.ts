@@ -1,10 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
-import { 
-  insertUserSchema, 
-  insertPlantSchema, 
-  insertEnvironmentReadingSchema, 
+import {
+  insertUserSchema,
+  insertPlantSchema,
+  insertEnvironmentReadingSchema,
   insertCareHistorySchema,
   insertRecommendationSchema,
   insertPlantHealthMetricsSchema,
@@ -16,7 +16,7 @@ import { ZodError } from "zod";
 import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
 import { generatePlantRecommendations, generateAiCareTips, generateGeneralDashboardTip } from "./services/aiService.js"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
 import fetch from 'node-fetch'; // Or your preferred HTTP client
-import { insertPlantCareTaskSchema } from '@shared/schema.js';
+import { insertPlantCareTaskSchema } from '../shared/schema.js';
 
 // Interface for the expected OpenMeteo API response structure
 interface OpenMeteoCurrentData {

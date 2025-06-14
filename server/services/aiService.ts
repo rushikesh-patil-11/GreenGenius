@@ -1,5 +1,5 @@
 import Groq from "groq-sdk";
-import type { PlantData, EnvironmentData } from "../../shared/schema";
+import type { PlantData, EnvironmentData } from "../../shared/schema.js";
 
 // Helper function to calculate days since a given date
 function calculateDaysSince(dateString: string | Date | null | undefined): string {

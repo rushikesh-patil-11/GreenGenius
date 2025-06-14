@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 import { 
   insertUserSchema, 
   insertPlantSchema, 
@@ -11,12 +11,12 @@ import {
   InsertPlant,
   PlantData, // Now imported from shared schema
   EnvironmentData // Now imported from shared schema
-} from "@shared/schema";
+} from "@shared/schema.js";
 import { ZodError } from "zod";
 import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
-import { generatePlantRecommendations, generateAiCareTips, generateGeneralDashboardTip } from "./services/aiService"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
+import { generatePlantRecommendations, generateAiCareTips, generateGeneralDashboardTip } from "./services/aiService.js"; // GeminiPlantData and EnvironmentData are now imported from shared/schema
 import fetch from 'node-fetch'; // Or your preferred HTTP client
-import { insertPlantCareTaskSchema } from '@shared/schema';
+import { insertPlantCareTaskSchema } from '@shared/schema.js';
 
 // Interface for the expected OpenMeteo API response structure
 interface OpenMeteoCurrentData {
@@ -56,7 +56,7 @@ function getSeason(date: Date): string {
   return "Winter"; // Dec, Jan, Feb
 }
 
-import historyRouter from "./routes/history";
+import historyRouter from "./routes/history.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Register plant activity history API endpoint

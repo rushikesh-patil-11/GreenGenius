@@ -8,12 +8,12 @@ import {
   PlantHealthMetric, InsertPlantHealthMetric,
   AiCareTip, InsertAiCareTip
   // Table objects (users, plants, etc.) will be accessed via schema.users, schema.plants
-} from "../shared/schema";
+} from "../shared/schema.js";
 import { eq, desc, sql, and, gte, lte, isNull, inArray, lt, gt, asc } from "drizzle-orm"; // Restored missing operators, added lt
 import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js'; 
 import postgres from 'postgres';
-import * as schema from "../shared/schema"; // Import all schema for DB typing
-import { generatePlantRecommendations } from "./services/aiService";
+import * as schema from "../shared/schema.js"; // Import all schema for DB typing
+import { generatePlantRecommendations } from "./services/aiService.js";
 
 // For upcoming tasks displayed on the dashboard
 export interface UpcomingTaskDisplay extends PlantCareTask {
@@ -557,7 +557,7 @@ export class DbStorage implements IStorage {
       where: eq(schema.recommendations.userId, parseInt(userId)),
       orderBy: [desc(schema.recommendations.createdAt)],
     });
-    return result.map(rec => ({
+    return result.map((rec: Recommendation) => ({
       ...rec,
       plantId: rec.plantId ?? null,
       applied: rec.applied ?? false,
@@ -572,7 +572,7 @@ export class DbStorage implements IStorage {
       orderBy: [desc(schema.recommendations.createdAt)],
     });
     console.log(`[DbStorage] Found ${result.length} recommendations for plantId: ${plantId}`);
-    return result.map(rec => ({
+    return result.map((rec: Recommendation) => ({
         ...rec,
       plantId: rec.plantId ?? null,
       applied: rec.applied ?? false,

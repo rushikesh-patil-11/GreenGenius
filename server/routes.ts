@@ -9,9 +9,9 @@ import {
   insertRecommendationSchema,
   insertPlantHealthMetricsSchema,
   InsertPlant,
-  PlantData, // Now imported from shared schema
-  EnvironmentData // Now imported from shared schema
-} from "@shared/schema.js";
+  PlantData,
+  EnvironmentData
+} from "../shared/schema.js";
 import { ZodError } from "zod";
 import { clerkClient, ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
 import { generatePlantRecommendations, generateAiCareTips, generateGeneralDashboardTip } from "./services/aiService.js"; // GeminiPlantData and EnvironmentData are now imported from shared/schema

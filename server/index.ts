@@ -13,10 +13,10 @@ const __dirname = path.dirname(__filename);
 
 import { ClerkExpressRequireAuth, ClerkExpressWithAuth, clerkClient, type RequireAuthProp } from '@clerk/clerk-sdk-node';
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import historyRouter from "./routes/history";
-import { initializeDatabase } from "./storage";
-import { setupVite, serveStatic, log } from "./vite";
+import { registerRoutes } from "./routes.js";
+import historyRouter from "./routes/history.js";
+import { initializeDatabase } from "./storage.js";
+import { setupVite, serveStatic, log } from "./vite.js";
 
 const app = express();
 app.use(express.json());
@@ -24,10 +24,10 @@ app.use(express.urlencoded({ extended: false }));
 app.use(ClerkExpressWithAuth());
 
 // Route for fetching plant details from Perenual API
-import { dbInstance } from './storage';
+import { dbInstance } from './storage.js';
 import { z } from 'zod';
-import * as schema from '../shared/schema';
-import { plants as plantsTable, users as usersTable } from '../shared/schema';
+import * as schema from '../shared/schema.js';
+import { plants as plantsTable, users as usersTable } from '../shared/schema.js';
 import { eq, and, sql, desc } from 'drizzle-orm';
 
 const CACHE_DURATION_DAYS = 7;

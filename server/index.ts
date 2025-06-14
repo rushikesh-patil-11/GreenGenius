@@ -1,5 +1,9 @@
 import * as dotenv from 'dotenv';
-import './env'; // Load environment variables first
+
+// Conditionally load .env file in non-production environments
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
 import path from 'path'; 
 import { fileURLToPath } from 'url'; 
 import axios from 'axios';
